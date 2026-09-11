@@ -67,6 +67,7 @@
             <button type="button" :class="{ active: activeProfile === 'user' }" @click="setActiveProfile('user')">Профиль ЛКС</button>
             <button type="button" :class="{ active: activeProfile === 'permiss' }" @click="setActiveProfile('permiss')">Полномочия</button>
             <button type="button" :class="{ active: activeProfile === 'external' }" @click="setActiveProfile('external')">Внешние системы</button>
+            <button type="button" :class="{ active: activeProfile === 'requisites' }" @click="setActiveProfile('requisites')">Реквизиты для оплаты</button>
         </div>
 
         <!-- Сайдбар внешних систем (только на вкладке «Внешние системы») -->
@@ -239,9 +240,42 @@
                             <div class="field">Email</div>
                             <div class="value">{{ email }}</div>
                         </div>
-                        <!-- <div class="info-card">
-                            <span class="field">Телефон</span>
-                        </div> -->
+                        <div class="info-card">
+                            <div class="field">Дата рождения</div>
+                            <div class="value">{{ birthDate ? formatDateRuShort(birthDate) : '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Телефон</div>
+                            <div class="value">{{ phone || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: серия</div>
+                            <div class="value">{{ passportSerial || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: номер</div>
+                            <div class="value">{{ passportNumber || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: дата выдачи</div>
+                            <div class="value">{{ passportDateIssue ? formatDateRuShort(passportDateIssue) : '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: кем выдан</div>
+                            <div class="value">{{ passportIssuedBy || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">СНИЛС</div>
+                            <div class="value">{{ snils || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Адрес регистрации</div>
+                            <div class="value">{{ registrationAddress || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Гражданство</div>
+                            <div class="value">{{ citizenshipId || '-' }}</div>
+                        </div>
                     </div>
                 </div>
 
@@ -524,6 +558,9 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Реквизиты для оплаты -->
+            <PaymentRequisites v-if="activeProfile === 'requisites'" :user-id="userId" :is-current-user="isCurrentUser" />
         </div>
     </main>
 </template>
@@ -540,6 +577,7 @@ import { formatDateRuShort } from '@/utils/date.js';
 
 import UpdateUser from '@/components/Users/UpdateUser.vue';
 import MePermissionsPage from '@/views/MePermissionsPage.vue';
+import PaymentRequisites from '@/components/Profile/PaymentRequisites.vue';
 
 const permissionStore = usePermissionStore();
 const router = useRouter();
@@ -627,6 +665,16 @@ const currentUserRoleIds = ref([]);
 const isAdmin = computed(() => currentUserRoleIds.value.includes(1));
 
 const isBlocked = ref(null);
+
+const birthDate = ref('');
+const phone = ref('');
+const passportSerial = ref('');
+const passportNumber = ref('');
+const passportDateIssue = ref('');
+const passportIssuedBy = ref('');
+const snils = ref('');
+const registrationAddress = ref('');
+const citizenshipId = ref('');
 
 const externalAccounts = ref([]);
 const externalAccountsLoading = ref(false);
@@ -1429,6 +1477,16 @@ const fetchUserProfile = async (id) => {
         email.value = profile.email;
         userRoles.value = profile.roles || [];
         isBlocked.value = profile.isBlocked;
+
+        birthDate.value = profile.birthDate || '';
+        phone.value = (Array.isArray(profile.phones) && profile.phones.length) ? profile.phones[0] : '';
+        passportSerial.value = profile.passportSerial || '';
+        passportNumber.value = profile.passportNumber || '';
+        passportDateIssue.value = profile.passportDateIssue || '';
+        passportIssuedBy.value = profile.passportIssuedBy || '';
+        snils.value = profile.snils || '';
+        registrationAddress.value = profile.registrationAddress || '';
+        citizenshipId.value = profile.citizenshipId || '';
 
         // The user payload includes external accounts; use it for the initial
         // profile state instead of requesting `other-accounts/getall` again.

@@ -29,6 +29,11 @@ export function getMyUmuGrades(params = {}) {
  * Получить учебный план студента (дисциплины и блоки выборных) по выбранной группе.
  * @param {Object} params
  * @param {number} params.studentId — код студента в UMU, привязанный к выбранной группе
+ * @param {string} [params.discipline] — поиск по названию дисциплины (подстрока)
+ * @param {number} [params.course] — курс
+ * @param {number} [params.semester] — семестр
+ * @param {number} [params.assessment] — тип контроля: 1 — экзамен, 2 — зачёт
+ * @param {number} [params.elective] — выборность: 1 — только выборные, 2 — только обязательные
  * @returns {Promise} axios-ответ с StudentCurriculum ({ curriculum, electives })
  */
 export function getMyUmuCurriculum(params = {}) {

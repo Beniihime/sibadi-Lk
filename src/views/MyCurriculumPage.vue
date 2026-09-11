@@ -10,7 +10,7 @@
                             }}{{ selectedGroup.course ? ` · ${selectedGroup.course} курс` : ''
                             }}{{ selectedGroup.specialtyCode ? ` · ${selectedGroup.specialtyCode}${selectedGroup.specialtyName ? ` ${selectedGroup.specialtyName}` : ''}` : '' }}
                     </p>
-                    <p v-else>Дисциплины учебного плана и расписание сессии по выбранной группе.</p>
+                    <p v-else>Дисциплины учебного плана по выбранной группе.</p>
                 </div>
 
                 <div class="cup-actions">
@@ -19,8 +19,8 @@
                         label="Обновить"
                         outlined
                         severity="secondary"
-                        :loading="activeLoading"
-                        @click="loadActiveTab"
+                        :loading="curriculumLoading"
+                        @click="loadCurriculum"
                     />
                 </div>
             </header>
@@ -69,25 +69,77 @@
                     </Select>
                 </div>
 
-                <div class="cup-tabs">
-                    <button
-                        type="button"
-                        :class="{ active: activeTab === 'curriculum' }"
-                        @click="setTab('curriculum')"
-                    >Дисциплины</button>
-                    <button
-                        type="button"
-                        :class="{ active: activeTab === 'exams' }"
-                        @click="setTab('exams')"
-                    >Расписание сессии</button>
-                </div>
-
                 <!-- Дисциплины -->
-                <section v-if="activeTab === 'curriculum'" class="cup-card">
+                <section class="cup-card">
                     <div class="cup-card-head">
                         <div class="cup-title-row">
                             <h3>Дисциплины</h3>
                             <Tag :value="`Всего: ${curriculumItems.length}`" severity="contrast" />
+                        </div>
+                        <div class="cup-card-head-actions">
+                            <Button
+                                icon="pi pi-filter"
+                                label="Фильтры"
+                                outlined
+                                severity="secondary"
+                                :class="{ 'cup-filter-toggle--active': showFilters }"
+                                :badge="activeFilterCount ? String(activeFilterCount) : undefined"
+                                @click="showFilters = !showFilters"
+                            />
+                        </div>
+                    </div>
+
+                    <div v-if="showFilters" class="cup-filters">
+                        <div class="cup-filter-field">
+                            <label>Дисциплина</label>
+                            <InputText
+                                v-model="discipline"
+                                placeholder="Поиск по названию"
+                                @keydown.enter="loadCurriculum"
+                            />
+                        </div>
+                        <div class="cup-filter-field">
+                            <label>Курс</label>
+                            <InputNumber v-model="course" :min="1" :useGrouping="false" placeholder="Любой" />
+                        </div>
+                        <div class="cup-filter-field">
+                            <label>Семестр</label>
+                            <InputNumber v-model="semester" :min="1" :useGrouping="false" placeholder="Любой" />
+                        </div>
+                        <div class="cup-filter-field">
+                            <label>Тип контроля</label>
+                            <Select
+                                v-model="assessment"
+                                :options="assessmentOptions"
+                                optionLabel="label"
+                                optionValue="value"
+                                placeholder="Любой"
+                            />
+                        </div>
+                        <div class="cup-filter-field">
+                            <label>Выборность</label>
+                            <Select
+                                v-model="elective"
+                                :options="electiveOptions"
+                                optionLabel="label"
+                                optionValue="value"
+                                placeholder="Все"
+                            />
+                        </div>
+                        <div class="cup-filter-actions">
+                            <Button
+                                label="Применить"
+                                icon="pi pi-check"
+                                :loading="curriculumLoading"
+                                @click="loadCurriculum"
+                            />
+                            <Button
+                                label="Сбросить"
+                                icon="pi pi-filter-slash"
+                                severity="secondary"
+                                text
+                                @click="resetCurriculumFilters"
+                            />
                         </div>
                     </div>
 
@@ -96,25 +148,17 @@
                         <h4>Загрузка учебного плана…</h4>
                     </div>
 
-                    <div v-else-if="!curriculumItems.length && !electiveGroups.length" class="cup-empty-state">
+                    <div v-else-if="!curriculumItems.length" class="cup-empty-state">
                         <i class="pi pi-inbox"></i>
                         <h4>Учебный план не найден</h4>
                         <p>Данные учебного плана для этой записи пока отсутствуют.</p>
                     </div>
 
                     <div v-else class="cup-curriculum">
-                        <section
-                            v-for="group in curriculumBySemester"
-                            :key="`cur-${group.semester}`"
-                            class="cup-curriculum-group"
-                        >
-                            <div class="cup-group-head">
-                                <h4>Семестр {{ group.semester }}</h4>
-                                <Tag :value="`${group.items.length} дисц.`" severity="secondary" />
-                            </div>
+                        <section v-if="curriculumItems.length" class="cup-curriculum-group">
                             <div class="cup-subjects-grid">
                                 <article
-                                    v-for="item in group.items"
+                                    v-for="item in curriculumItems"
                                     :key="item.disciplineId || item.discipline"
                                     class="cup-subject-card"
                                 >
@@ -127,109 +171,42 @@
                                             <Tag v-if="item.facultative" severity="warn" value="Факультатив" />
                                         </div>
                                     </div>
-                                    <div class="cup-subject-meta">
-                                        <span><i class="pi pi-clock"></i>{{ item.hours ? `${item.hours} ч` : '—' }}</span>
-                                        <span><i class="pi pi-users"></i>{{ item.hoursAud ? `${item.hoursAud} ч ауд.` : '—' }}</span>
-                                        <span v-if="item.department"><i class="pi pi-building"></i>{{ item.department }}</span>
+                                    <div v-if="item.department" class="cup-subject-meta">
+                                        <span><i class="pi pi-building"></i>{{ item.department }}</span>
                                     </div>
-                                </article>
-                            </div>
-                        </section>
-
-                        <section v-if="electiveGroups.length" class="cup-electives">
-                            <div class="cup-group-head">
-                                <h4>Выборные дисциплины</h4>
-                            </div>
-                            <section
-                                v-for="(group, idx) in electiveGroups"
-                                :key="`elec-${idx}`"
-                                class="cup-curriculum-group cup-curriculum-group--nested"
-                            >
-                                <div class="cup-subhead">
-                                    <span>{{ group.block || 'Блок' }}</span>
-                                    <Tag :value="`Семестр ${group.semester}`" severity="secondary" />
-                                </div>
-                                <div class="cup-subjects-grid">
-                                    <article
-                                        v-for="item in group.disciplines"
-                                        :key="item.disciplineId || item.discipline"
-                                        class="cup-subject-card"
-                                    >
-                                        <div class="cup-subject-title">
-                                            <strong>{{ item.discipline || 'Без названия' }}</strong>
-                                            <small v-if="item.hours">{{ item.hours }} ч</small>
-                                        </div>
-                                        <div class="cup-subject-meta">
-                                            <span v-if="item.department"><i class="pi pi-building"></i>{{ item.department }}</span>
-                                        </div>
-                                    </article>
-                                </div>
-                            </section>
-                        </section>
-                    </div>
-                </section>
-
-                <!-- Расписание сессии -->
-                <section v-else-if="activeTab === 'exams'" class="cup-card">
-                    <div class="cup-card-head">
-                        <div class="cup-title-row">
-                            <h3>Расписание сессии</h3>
-                            <Tag :value="`${examItems.length} зап.`" severity="contrast" />
-                        </div>
-                    </div>
-
-                    <div v-if="examLoading" class="cup-empty-state">
-                        <ProgressSpinner style="width: 2.5rem; height: 2.5rem;" />
-                        <h4>Загрузка расписания сессии…</h4>
-                    </div>
-
-                    <div v-else-if="!examItems.length" class="cup-empty-state">
-                        <i class="pi pi-inbox"></i>
-                        <h4>Расписание не найдено</h4>
-                        <p>Данные расписания сессии для этой записи пока отсутствуют.</p>
-                    </div>
-
-                    <div v-else class="cup-curriculum">
-                        <section
-                            v-for="group in examsBySemester"
-                            :key="`exam-${group.semester}`"
-                            class="cup-curriculum-group"
-                        >
-                            <div class="cup-group-head">
-                                <h4>Семестр {{ group.semester }}</h4>
-                                <Tag :value="`${group.items.length} зап.`" severity="secondary" />
-                            </div>
-                            <div class="cup-subjects-grid">
-                                <article
-                                    v-for="(item, idx) in group.items"
-                                    :key="`${item.discipline}-${item.controlType}-${idx}`"
-                                    class="cup-subject-card cup-exam-card"
-                                    :class="{ 'cup-exam-card--resit': item.isResit }"
-                                >
-                                    <div class="cup-subject-title">
-                                        <strong>{{ item.discipline || 'Без названия' }}</strong>
-                                        <div class="cup-tags">
-                                            <Tag
-                                                v-if="item.controlTypeName"
-                                                :severity="examSeverity(item.controlType)"
-                                                :value="item.controlTypeName"
-                                            />
-                                            <Tag v-if="item.isResit" severity="warn" value="Пересдача" />
-                                            <Tag v-if="item.block" severity="secondary" :value="item.block" />
-                                        </div>
-                                    </div>
-                                    <div class="cup-subject-meta">
-                                        <span v-if="item.examDate"><i class="pi pi-calendar"></i>Экзамен: {{ item.examDate }}</span>
-                                        <span v-if="item.creditDate"><i class="pi pi-calendar-check"></i>Зачёт: {{ item.creditDate }}</span>
-                                    </div>
-                                    <div class="cup-subject-meta">
-                                        <span v-if="item.examAuditorium"><i class="pi pi-map-marker"></i>{{ item.examAuditorium }}</span>
-                                        <span v-if="item.creditAuditorium"><i class="pi pi-map-marker"></i>{{ item.creditAuditorium }}</span>
-                                    </div>
-                                    <div class="cup-subject-meta">
-                                        <span v-if="item.teacher"><i class="pi pi-user"></i>{{ item.teacher }}</span>
-                                        <span v-if="item.department"><i class="pi pi-building"></i>{{ item.department }}</span>
-                                    </div>
+                                    <ul v-if="item.semesters?.length" class="cup-semesters">
+                                        <li
+                                            v-for="sem in item.semesters"
+                                            :key="sem.semester"
+                                            class="cup-semester"
+                                        >
+                                            <div class="cup-semester-head">
+                                                <strong>{{ sem.semester }} сем.</strong>
+                                                <span v-if="sem.course" class="cup-semester-course">{{ sem.course }} курс</span>
+                                                <div class="cup-tags">
+                                                    <Tag v-if="sem.exam" severity="warn" value="Экзамен" />
+                                                    <Tag v-if="sem.credit" severity="success" value="Зачёт" />
+                                                </div>
+                                            </div>
+                                            <div class="cup-semester-hours">
+                                                <span v-if="sem.hours"><i class="pi pi-clock"></i>{{ sem.hours }} ч</span>
+                                                <span v-if="sem.hoursAud">{{ sem.hoursAud }} ч ауд.</span>
+                                                <span v-if="sem.lecture?.hours">Лек {{ sem.lecture.hours }} ч</span>
+                                                <span v-if="sem.practical?.hours">Прак {{ sem.practical.hours }} ч</span>
+                                                <span v-if="sem.laboratory?.hours">Лаб {{ sem.laboratory.hours }} ч</span>
+                                            </div>
+                                            <ul v-if="semesterTeacherRows(sem).length" class="cup-teachers">
+                                                <li
+                                                    v-for="(row, i) in semesterTeacherRows(sem)"
+                                                    :key="i"
+                                                    class="cup-teacher-row"
+                                                >
+                                                    <i class="pi pi-user"></i>
+                                                    <span>{{ row.teacher }}<template v-if="row.subgroup"> · {{ row.subgroup }} п/г</template> · {{ row.type }} · {{ row.hours }} ч</span>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
                                 </article>
                             </div>
                         </section>
@@ -242,16 +219,11 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import { useUmuStudentGroups } from '@/composables/useUmuStudentGroups.js';
-import { getMyUmuCurriculum, getMyUmuExamSchedule } from '@/api/umu.js';
+import { getMyUmuCurriculum } from '@/api/umu.js';
 
 const toast = useToast();
-const route = useRoute();
-
-const TABS = ['curriculum', 'exams'];
-const activeTab = ref(TABS.includes(route.query.tab) ? route.query.tab : 'curriculum');
 
 const {
     groups,
@@ -265,37 +237,95 @@ const {
 const curriculumData = ref(null);
 const curriculumLoading = ref(false);
 
-const examData = ref(null);
-const examLoading = ref(false);
+// Фильтры учебного плана (CurriculumFilter: дисциплина, курс, семестр, тип контроля, выборность)
+const showFilters = ref(false);
+const discipline = ref('');
+const course = ref(null);
+const semester = ref(null);
+const assessment = ref(null);
+const elective = ref(null);
 
-const curriculumItems = computed(() => curriculumData.value?.curriculum || []);
-const electiveGroups = computed(() => curriculumData.value?.electives || []);
+// CurriculumAssessment в proto: 1 — экзамен, 2 — зачёт (0/нет значения — любой)
+const assessmentOptions = [
+    { label: 'Экзамен', value: 1 },
+    { label: 'Зачёт', value: 2 },
+];
+// CurriculumElective в proto: 1 — только выборные, 2 — только обязательные (0/нет значения — все)
+const electiveOptions = [
+    { label: 'Только выборные', value: 1 },
+    { label: 'Только обязательные', value: 2 },
+];
 
-const examItems = computed(() => examData.value?.items || []);
-
-const groupBySemester = (items) => {
-    const map = new Map();
-    for (const item of items) {
-        const sem = item.semester ?? 0;
-        if (!map.has(sem)) map.set(sem, { semester: sem, items: [] });
-        map.get(sem).items.push(item);
+// Основные дисциплины + выборные (из отдельного поля electives) в одном плоском списке
+// с дедупликацией по disciplineId — отдельный блок выборных больше не выводится.
+const curriculumItems = computed(() => {
+    const main = curriculumData.value?.curriculum || [];
+    const electiveDisciplines = (curriculumData.value?.electives || []).flatMap((g) => g.disciplines || []);
+    const seen = new Set();
+    const merged = [];
+    for (const item of [...main, ...electiveDisciplines]) {
+        const key = item.disciplineId ?? item.discipline;
+        if (key == null || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(item);
     }
-    return [...map.values()].sort((a, b) => a.semester - b.semester);
+    return merged;
+});
+
+const activeFilterCount = computed(() => [
+    String(discipline.value || '').trim() || null,
+    course.value || null,
+    semester.value || null,
+    assessment.value != null ? assessment.value : null,
+    elective.value != null ? elective.value : null,
+].filter((v) => v !== null && v !== '').length);
+
+const buildCurriculumParams = () => {
+    const params = { studentId: selectedGroup.value.studentId };
+
+    if (String(discipline.value || '').trim()) params.discipline = String(discipline.value).trim();
+    if (course.value) params.course = course.value;
+    if (semester.value) params.semester = semester.value;
+    if (assessment.value != null) params.assessment = assessment.value;
+    if (elective.value != null) params.elective = elective.value;
+
+    return params;
 };
 
-const curriculumBySemester = computed(() => groupBySemester(curriculumItems.value));
-const examsBySemester = computed(() => groupBySemester(examItems.value));
+const resetCurriculumFilters = () => {
+    discipline.value = '';
+    course.value = null;
+    semester.value = null;
+    assessment.value = null;
+    elective.value = null;
+    loadCurriculum();
+};
 
-const activeLoading = computed(() => (
-    activeTab.value === 'curriculum' ? curriculumLoading.value : examLoading.value
-));
+// Типы занятий с подписями для вывода преподавателей по часам.
+const WORK_TYPES = [
+    { key: 'lecture', label: 'Лекция' },
+    { key: 'practical', label: 'Практика' },
+    { key: 'laboratory', label: 'Лабораторная работа' },
+];
 
-const examSeverity = (controlType) => {
-    // 1=экзамен, 2=зачёт, 3/4=пересдача
-    if (controlType === 1) return 'warn';
-    if (controlType === 2) return 'success';
-    if (controlType === 3 || controlType === 4) return 'danger';
-    return 'secondary';
+// Разворачивает преподавателей семестра по типам занятий:
+// { teacher: ФИО, subgroup: № подгруппы|null, type: подпись типа, hours: часы типа }
+const semesterTeacherRows = (sem) => {
+    const rows = [];
+    for (const t of WORK_TYPES) {
+        const block = sem?.[t.key];
+        if (!block?.teachers?.length) continue;
+        for (const teacher of block.teachers) {
+            if (!teacher?.teacher) continue;
+            rows.push({
+                teacher: teacher.teacher,
+                subgroup: teacher.subgroup ?? null,
+                type: t.label,
+                hours: block.hours ?? 0,
+            });
+        }
+    }
+    return rows;
 };
 
 const loadCurriculum = async () => {
@@ -304,7 +334,7 @@ const loadCurriculum = async () => {
     curriculumLoading.value = true;
 
     try {
-        const response = await getMyUmuCurriculum({ studentId: selectedGroup.value.studentId });
+        const response = await getMyUmuCurriculum(buildCurriculumParams());
         curriculumData.value = response.data ?? null;
     } catch (error) {
         curriculumData.value = null;
@@ -319,47 +349,16 @@ const loadCurriculum = async () => {
     }
 };
 
-const loadExams = async () => {
-    if (!selectedGroup.value) return;
-
-    examLoading.value = true;
-
-    try {
-        const response = await getMyUmuExamSchedule({ studentId: selectedGroup.value.studentId });
-        examData.value = response.data ?? null;
-    } catch (error) {
-        examData.value = null;
-        toast.add({
-            severity: 'error',
-            summary: 'Не удалось загрузить расписание сессии',
-            detail: error?.response?.data?.title || error?.response?.data?.message || 'Попробуйте позже.',
-            life: 3500,
-        });
-    } finally {
-        examLoading.value = false;
-    }
-};
-
-const loadActiveTab = async () => {
-    if (activeTab.value === 'curriculum') {
-        await loadCurriculum();
-    } else if (activeTab.value === 'exams') {
-        await loadExams();
-    }
-};
-
-const setTab = (tab) => {
-    if (activeTab.value === tab) return;
-    activeTab.value = tab;
-    loadActiveTab();
-};
-
-// При смене группы сбрасываем кэш и подгружаем активный таб.
+// При смене группы сбрасываем кэш и фильтры, подгружаем учебный план.
 watch(selectedGroup, async (group) => {
     if (!group) return;
     curriculumData.value = null;
-    examData.value = null;
-    await loadActiveTab();
+    discipline.value = '';
+    course.value = null;
+    semester.value = null;
+    assessment.value = null;
+    elective.value = null;
+    await loadCurriculum();
 });
 </script>
 
@@ -426,34 +425,6 @@ watch(selectedGroup, async (group) => {
     font-size: 0.74rem;
 }
 
-.cup-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-.cup-tabs button {
-    flex: 1 1 0;
-    min-width: 9rem;
-    padding: 0.6rem 1rem;
-    border: 1px solid var(--p-grey-4);
-    border-radius: 0.75rem;
-    background: var(--p-bg-color-1);
-    color: var(--p-text-color);
-    font-size: 0.9rem;
-    font-weight: 650;
-    cursor: pointer;
-    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-.cup-tabs button:hover {
-    border-color: color-mix(in srgb, var(--p-primary-color) 55%, transparent);
-    color: var(--p-primary-color);
-}
-.cup-tabs button.active {
-    border-color: color-mix(in srgb, var(--p-primary-color) 55%, transparent);
-    color: var(--p-primary-color);
-    background: color-mix(in srgb, var(--p-primary-color) 13%, transparent);
-}
-
 .cup-card {
     display: flex;
     flex-direction: column;
@@ -483,6 +454,54 @@ watch(selectedGroup, async (group) => {
 }
 .cup-title-row h3 { margin: 0; }
 
+.cup-card-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.cup-filter-toggle--active {
+    border-color: color-mix(in srgb, var(--p-primary-color) 55%, transparent);
+    color: var(--p-primary-color);
+    background: color-mix(in srgb, var(--p-primary-color) 13%, transparent);
+}
+
+.cup-filters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+    align-items: end;
+    padding: 0.85rem;
+    border-radius: 14px;
+    border: 1px dashed var(--cup-border);
+    background: rgba(var(--p-blue-500-rgb), 0.03);
+}
+/* Анти-overflow: grid-элементы не растягивают контейнер */
+.cup-filters > * {
+    min-width: 0;
+}
+.cup-filters :deep(.p-select),
+.cup-filters :deep(.p-inputtext),
+.cup-filters :deep(.p-inputnumber),
+.cup-filters :deep(.p-inputnumber-input) {
+    width: 100%;
+}
+.cup-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.cup-filter-field label {
+    font-size: 0.78rem;
+    color: var(--p-grey-1);
+}
+.cup-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
 .cup-curriculum {
     display: flex;
     flex-direction: column;
@@ -505,28 +524,6 @@ watch(selectedGroup, async (group) => {
     font-size: 1rem;
     font-weight: 750;
 }
-.cup-curriculum-group--nested {
-    padding: 0.75rem;
-    border-radius: 0.75rem;
-    border: 1px dashed var(--cup-border);
-    background: rgba(var(--p-blue-500-rgb), 0.03);
-}
-.cup-subhead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    font-weight: 650;
-    font-size: 0.88rem;
-}
-.cup-electives {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    padding-top: 0.5rem;
-    border-top: 1px dashed var(--p-grey-4);
-}
-.cup-electives .cup-group-head h4 { color: var(--p-primary-color); }
 
 .cup-subjects-grid {
     display: grid;
@@ -548,10 +545,6 @@ watch(selectedGroup, async (group) => {
 .cup-subject-card:hover {
     border-color: color-mix(in srgb, var(--p-primary-color) 48%, transparent);
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-}
-.cup-exam-card--resit {
-    border-color: color-mix(in srgb, var(--p-orange-400, #fb923c) 40%, transparent);
-    background: color-mix(in srgb, var(--p-orange-400, #fb923c) 6%, var(--p-bg-color-1));
 }
 
 .cup-subject-title {
@@ -594,6 +587,78 @@ watch(selectedGroup, async (group) => {
     color: var(--p-primary-color);
 }
 
+.cup-semesters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.cup-semester {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.65rem;
+    border: 1px solid var(--p-grey-4);
+    background: color-mix(in srgb, var(--p-bg-color-1) 92%, var(--p-primary-color) 4%);
+}
+.cup-semester-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.86rem;
+}
+.cup-semester-head strong { font-weight: 700; }
+.cup-semester-course {
+    color: var(--p-text-muted-color, var(--p-grey-2));
+    font-size: 0.78rem;
+}
+.cup-semester-head .cup-tags { margin-top: 0; }
+.cup-semester-hours {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.9rem;
+    color: var(--p-text-muted-color, var(--p-grey-2));
+    font-size: 0.8rem;
+}
+.cup-semester-hours span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.cup-semester-hours i {
+    font-size: 0.78rem;
+    color: var(--p-primary-color);
+}
+.cup-teachers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.cup-teacher-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    color: var(--p-text-muted-color, var(--p-grey-2));
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+.cup-teacher-row > i {
+    font-size: 0.78rem;
+    color: var(--p-primary-color);
+    margin-top: 0.15rem;
+    flex: 0 0 auto;
+}
+.cup-teacher-row > span {
+    min-width: 0;
+}
+
 .cup-empty-state {
     min-height: 240px;
     display: flex;
@@ -607,13 +672,15 @@ watch(selectedGroup, async (group) => {
 .cup-empty-state h4, .cup-empty-state p { margin: 0; }
 .cup-empty-state p { max-width: 48ch; color: var(--p-grey-1); }
 
+@media (max-width: 1100px) {
+    .cup-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 768px) {
     .cup-shell { padding: 1rem; }
     .cup-header { flex-direction: column; align-items: stretch; }
     .cup-actions { justify-content: flex-start; }
     .cup-subjects-grid { grid-template-columns: 1fr; }
-    .cup-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-    .cup-tabs::-webkit-scrollbar { display: none; }
-    .cup-tabs button { flex: 0 0 auto; white-space: nowrap; min-width: 0; }
+    .cup-filters { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

@@ -506,6 +506,17 @@ onMounted(loadGroups);
     background: rgba(var(--p-blue-500-rgb), 0.03);
 }
 
+/* Анти-overflow: grid-элементы не растягивают контейнер */
+.erb-filters > * {
+    min-width: 0;
+}
+
+.erb-filters :deep(.p-select),
+.erb-filters :deep(.p-datepicker),
+.erb-filters :deep(.p-inputtext) {
+    width: 100%;
+}
+
 .erb-filter-field {
     display: flex;
     flex-direction: column;
@@ -530,6 +541,7 @@ onMounted(loadGroups);
 
 .erb-filter-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     align-items: center;
 }
@@ -737,7 +749,7 @@ onMounted(loadGroups);
     .erb-shell { padding: 1rem; }
     .erb-header { flex-direction: column; align-items: stretch; }
     .erb-actions { justify-content: flex-start; }
-    .erb-filters { grid-template-columns: 1fr; }
+    .erb-filters { grid-template-columns: minmax(0, 1fr); }
 
     /* Карточки предметов в одну колонку — как расписание на мобильном */
     .erb-subjects-grid { grid-template-columns: 1fr; }

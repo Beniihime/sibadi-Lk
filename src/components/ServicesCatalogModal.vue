@@ -183,7 +183,7 @@ const microserviceItems = computed(() => {
     }
 
     if (canManageNews.value) {
-        items.push({ id: 'news', name: 'Новости', badge: 'Контент', description: 'Публикации, редактура и управление новостной лентой.', path: '/news/manage', icon: 'pi pi-megaphone' });
+        items.push({ id: 'news', name: 'Новости', badge: 'Настройки', description: 'Публикации, редактура и управление новостной лентой.', path: '/news/manage', icon: 'pi pi-megaphone' });
     }
 
     return items;

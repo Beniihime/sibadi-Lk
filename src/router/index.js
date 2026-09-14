@@ -319,6 +319,15 @@ const routes = [
                 }
             },
             {
+                path: "/news",
+                component: () => import('@/views/news/NewsPage.vue'),
+                name: 'News',
+                meta: {
+                    requiresAuth: true,
+                    title: 'Новости'
+                }
+            },
+            {
                 path: "/news/manage",
                 component: () => import('@/views/news/NewsManagePage.vue'),
                 name: 'NewsManage',

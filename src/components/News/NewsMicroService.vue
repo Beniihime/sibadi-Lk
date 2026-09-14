@@ -12,7 +12,7 @@
                 <p>Новостная лента, публикации, реакции и редакционный контур.</p>
             </div>
             <div class="service-card-footer">
-                <span>Открыть редактор</span>
+                <span>Открыть настройки</span>
                 <i class="pi pi-arrow-right"></i>
             </div>
         </div>

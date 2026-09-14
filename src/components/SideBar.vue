@@ -400,6 +400,14 @@ const servicesCatalogItems = computed(() => {
         description: 'Опросы и анкетирование сотрудников и студентов.',
     });
 
+    items.push({
+        id: 'news',
+        name: 'Новости',
+        icon: 'pi pi-megaphone',
+        path: '/news',
+        description: 'Новостная лента, теги, реакции и закладки.',
+    });
+
     return items;
 });
 

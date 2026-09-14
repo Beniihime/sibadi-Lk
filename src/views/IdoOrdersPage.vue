@@ -153,45 +153,70 @@
 
         <Card class="ido-table-card">
             <template #content>
-                <DataTable
-                    lazy
-                    paginator
-                    scrollable
-                    stripedRows
-                    :rows="rowsPerPage"
-                    :totalRecords="totalRecords"
-                    :value="orders"
-                    :loading="loading"
-                    :rowsPerPageOptions="[5, 10, 15]"
-                    @page="onPage"
-                    @row-click="openOrder"
-                >
-                    <template #empty>
-                        <div class="ido-empty-state">
-                            <i class="pi pi-inbox fs-2"></i>
-                            <h4 class="mt-3 mb-2">Заявки не найдены</h4>
-                            <p class="text-color-secondary mb-0">Попробуйте обновить список или изменить фильтры.</p>
-                        </div>
-                    </template>
+                <div class="ido-card-list-head">
+                    <Tag :value="`Всего: ${totalRecords}`" severity="contrast" />
+                    <Select
+                        v-model="rowsPerPage"
+                        :options="rowsPerPageOptions"
+                        optionLabel="label"
+                        optionValue="value"
+                        placeholder="Строк на странице"
+                        class="ido-rows-select"
+                        @change="onRowsPerPageChange"
+                    />
+                </div>
 
-                    <Column field="topic" header="Тема" style="min-width: 260px;" />
-                    <Column field="teacher" header="Преподаватель" style="min-width: 240px;">
-                        <template #body="{ data }">
-                            {{ buildTeacherLabel(data.teacher) || '-' }}
-                        </template>
-                    </Column>
-                    <Column field="employer" header="Заказчик" style="min-width: 220px;">
-                        <template #body="{ data }">
-                            {{ buildEmployerLabel(data.employer) || '-' }}
-                        </template>
-                    </Column>
-                    <Column field="hoursQuantity" header="Часы" style="width: 120px;" />
-                    <Column field="sum" header="Сумма" style="width: 160px;">
-                        <template #body="{ data }">
-                            {{ formatCurrency(data.sum) }}
-                        </template>
-                    </Column>
-                </DataTable>
+                <div v-if="loading && !orders.length" class="ido-card-list">
+                    <div v-for="idx in 6" :key="`ido-skeleton-${idx}`" class="ido-card ido-card-skeleton">
+                        <Skeleton width="60%" height="1.1rem" borderRadius="8px" />
+                        <Skeleton width="90%" height="1.4rem" borderRadius="8px" />
+                        <Skeleton width="70%" height="0.9rem" borderRadius="8px" />
+                        <Skeleton width="50%" height="0.9rem" borderRadius="8px" />
+                    </div>
+                </div>
+
+                <div v-else-if="orders.length" class="ido-card-list">
+                    <article
+                        v-for="order in orders"
+                        :key="order.id"
+                        class="ido-card"
+                        @click="openOrder(order)"
+                    >
+                        <div class="ido-card-head">
+                            <div class="ido-card-number">
+                                <i class="pi pi-list-check"></i>
+                                <strong>{{ formatCurrency(order.sum) }}</strong>
+                            </div>
+                            <Tag :value="`${order.hoursQuantity ?? 0} ч`" severity="info" />
+                        </div>
+
+                        <div class="ido-card-summary">{{ order.topic || 'Без темы' }}</div>
+
+                        <ul class="ido-card-fields">
+                            <li v-if="buildTeacherLabel(order.teacher)" class="ido-card-field">
+                                <span class="ido-card-field-label">Преподаватель</span>
+                                <span class="ido-card-field-chip">{{ buildTeacherLabel(order.teacher) }}</span>
+                            </li>
+                            <li v-if="buildEmployerLabel(order.employer)" class="ido-card-field">
+                                <span class="ido-card-field-label">Заказчик</span>
+                                <span class="ido-card-field-chip">{{ buildEmployerLabel(order.employer) }}</span>
+                            </li>
+                        </ul>
+                    </article>
+                </div>
+
+                <div v-else class="ido-empty-state">
+                    <i class="pi pi-inbox fs-2"></i>
+                    <h4 class="mt-3 mb-2">Заявки не найдены</h4>
+                    <p class="text-color-secondary mb-0">Попробуйте обновить список или изменить фильтры.</p>
+                </div>
+
+                <Paginator
+                    :rows="rowsPerPage"
+                    :first="firstRowIndex"
+                    :totalRecords="totalRecords"
+                    @page="onPage"
+                />
             </template>
         </Card>
 
@@ -224,8 +249,13 @@ const employerLksLoading = ref(false);
 const reportLoading = ref(false);
 const orders = ref([]);
 const totalRecords = ref(0);
-const rowsPerPage = ref(10);
+const rowsPerPage = ref(12);
 const currentPage = ref(1);
+const rowsPerPageOptions = [
+    { label: '12', value: 12 },
+    { label: '24', value: 24 },
+    { label: '48', value: 48 },
+];
 const role = ref('employer-lks');
 const availableRoles = ref(['employer-lks']);
 const selectedOrderId = ref('');
@@ -261,6 +291,8 @@ const availableRoleOptions = computed(() => availableRoles.value.map((value) => 
 const showRoleSwitcher = computed(() =>
     role.value !== 'su' && availableRoleOptions.value.length > 1
 );
+
+const firstRowIndex = computed(() => (currentPage.value - 1) * rowsPerPage.value);
 
 const requestParams = computed(() => {
     const params = {
@@ -511,8 +543,14 @@ const onPage = (event) => {
     fetchOrders();
 };
 
-const openOrder = ({ data }) => {
-    selectedOrderId.value = data.id;
+const onRowsPerPageChange = () => {
+    currentPage.value = 1;
+    fetchOrders();
+};
+
+const openOrder = (order) => {
+    if (!order?.id) return;
+    selectedOrderId.value = order.id;
     detailsVisible.value = true;
 };
 
@@ -709,22 +747,124 @@ onMounted(async () => {
     font-weight: 700;
 }
 
-.ido-table-card :deep(.p-datatable-header-cell) {
+.ido-card-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.ido-rows-select {
+    max-width: 12rem;
+    width: 100%;
+}
+
+.ido-card-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(clamp(260px, 45vw, 340px), 1fr));
+    gap: 0.85rem;
+}
+
+.ido-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--p-primary-500-rgb), 0.14);
+    background: linear-gradient(
+        180deg,
+        rgba(var(--p-primary-500-rgb), 0.05),
+        rgba(255, 255, 255, 0)
+    );
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.ido-card:hover {
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1);
+    transform: translateY(-2px);
+}
+
+.ido-card-skeleton {
+    cursor: default;
     background: var(--p-content-background);
+    box-shadow: none;
+}
+
+.ido-card-skeleton:hover {
+    box-shadow: none;
+    transform: none;
+}
+
+.ido-card-head,
+.ido-card-number {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.ido-card-number {
+    justify-content: flex-start;
+}
+
+.ido-card-number .pi {
+    font-size: 1.3rem;
+    color: var(--p-primary-color);
+}
+
+.ido-card-summary {
+    font-weight: 600;
+    font-size: 1.02rem;
+    line-height: 1.35;
     color: var(--p-text-color);
 }
 
-.ido-table-card :deep(.p-datatable-thead > tr > th) {
-    font-weight: 700;
+.ido-card-fields {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
-.ido-table-card :deep(.p-datatable-tbody > tr) {
-    cursor: pointer;
-    transition: background-color 0.2s ease;
+.ido-card-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
 }
 
-.ido-table-card :deep(.p-datatable-tbody > tr:hover) {
-    background: var(--p-blue-500-low-op);
+.ido-card-field-label {
+    flex: 0 0 auto;
+    color: var(--p-text-muted-color, var(--p-grey-2));
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.ido-card-field-label::after {
+    content: ':';
+}
+
+.ido-card-field-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.32rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(var(--p-primary-500-rgb), 0.08);
+    font-size: 0.82rem;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @media (max-width: 992px) {

@@ -18,13 +18,6 @@
                         :loading="listLoading"
                         @click="refreshPage"
                     />
-                    <Button
-                        v-if="canCreateStudentTickets && canReadStudentTickets"
-                        icon="pi pi-list"
-                        label="К списку заявок"
-                        text
-                        @click="scrollToList"
-                    />
                 </div>
             </header>
 
@@ -33,7 +26,6 @@
             <template v-else>
                 <section
                     v-if="canReadStudentTickets"
-                    ref="listSectionRef"
                     class="tickets-student-card tickets-student-card-list"
                 >
                     <div class="tickets-student-card-head">
@@ -94,135 +86,66 @@
                         />
                     </div>
 
-                    <div v-if="isPhone" class="tickets-student-mobile-list">
-                        <div v-if="studentTickets.length" class="tickets-student-mobile-cards">
-                            <article
-                                v-for="ticket in studentTickets"
-                                :key="ticket.id"
-                                class="tickets-student-mobile-card"
-                            >
-                                <div class="tickets-student-mobile-card-head">
-                                    <div>
-                                        <strong>№ {{ ticket.number || '—' }}</strong>
-                                        <span>{{ ticket.requestType?.name || 'Тип не указан' }}</span>
-                                    </div>
-                                    <Tag
-                                        :severity="getStatusSeverity(ticket.status)"
-                                        :value="getStatusLabel(ticket.status)"
-                                        :icon="getStatusIcon(ticket.status)"
-                                    />
+                    <div v-if="studentTickets.length" class="tickets-student-grid">
+                        <article
+                            v-for="ticket in studentTickets"
+                            :key="ticket.id"
+                            class="tickets-student-grid-card"
+                            @click="openTicketDetails(ticket)"
+                        >
+                            <div class="tickets-student-grid-head">
+                                <div class="tickets-student-grid-number">
+                                    <i class="pi pi-file"></i>
+                                    <strong>№ {{ ticket.number || '—' }}</strong>
                                 </div>
+                                <Tag
+                                    :severity="getStatusSeverity(ticket.status)"
+                                    :value="getStatusLabel(ticket.status)"
+                                    :icon="getStatusIcon(ticket.status)"
+                                />
+                            </div>
 
-                                <div class="tickets-student-mobile-meta">
+                            <div class="tickets-student-grid-summary">
+                                {{ ticket.requestType?.name || 'Тип не указан' }}
+                            </div>
+
+                            <ul class="tickets-student-grid-fields">
+                                <li class="tickets-student-grid-field">
+                                    <span class="tickets-student-grid-field-label">Приоритет</span>
                                     <Tag
                                         :severity="getPrioritySeverity(ticket.priority)"
                                         :value="getPriorityLabel(ticket.priority)"
                                     />
-                                    <span>{{ formatDate(ticket.createdAt) }}</span>
-                                </div>
+                                </li>
+                                <li v-if="ticket.createdAt" class="tickets-student-grid-field">
+                                    <span class="tickets-student-grid-field-label">Создана</span>
+                                    <span class="tickets-student-grid-field-chip">{{ formatDate(ticket.createdAt) }}</span>
+                                </li>
+                                <li v-if="ticket.updatedAt" class="tickets-student-grid-field">
+                                    <span class="tickets-student-grid-field-label">Обновлена</span>
+                                    <span class="tickets-student-grid-field-chip">{{ formatDate(ticket.updatedAt) }}</span>
+                                </li>
+                            </ul>
 
-                                <div class="tickets-student-mobile-summary">
-                                    {{ ticket.summary }}
-                                </div>
-
-                                <div class="tickets-student-mobile-actions">
-                                    <Button
-                                        label="Открыть заявку"
-                                        icon="pi pi-paperclip"
-                                        severity="secondary"
-                                        outlined
-                                        @click="openTicketDetails(ticket)"
-                                    />
-                                </div>
-                            </article>
-                        </div>
-
-                        <div v-else class="tickets-student-empty-state">
-                            <i class="pi pi-inbox"></i>
-                            <h4>Заявки не найдены</h4>
-                            <p>{{ hasActiveListFilters ? 'Измените параметры фильтрации и попробуйте ещё раз.' : 'У вас пока нет созданных заявок на справки.' }}</p>
-                        </div>
-
-                        <Paginator
-                            :rows="rowsPerPage"
-                            :first="firstRowIndex"
-                            :totalRecords="totalRecords"
-                            @page="onPage"
-                        />
+                            <div v-if="ticket.summary" class="tickets-student-grid-row">
+                                <span class="tickets-student-grid-label">Данные</span>
+                                <span class="tickets-student-grid-value clamp-2">{{ ticket.summary }}</span>
+                            </div>
+                        </article>
                     </div>
 
-                    <DataTable
-                        v-else
-                        lazy
-                        paginator
-                        scrollable
-                        stripedRows
-                        class="tickets-student-table"
-                        :value="studentTickets"
-                        :loading="listLoading"
+                    <div v-else class="tickets-student-empty-state">
+                        <i class="pi pi-inbox"></i>
+                        <h4>Заявки не найдены</h4>
+                        <p>{{ hasActiveListFilters ? 'Измените параметры фильтрации и попробуйте ещё раз.' : 'У вас пока нет созданных заявок на справки.' }}</p>
+                    </div>
+
+                    <Paginator
                         :rows="rowsPerPage"
                         :first="firstRowIndex"
                         :totalRecords="totalRecords"
-                        :rowsPerPageOptions="[5, 10, 20]"
                         @page="onPage"
-                    >
-                        <template #empty>
-                            <div class="tickets-student-empty-state">
-                                <i class="pi pi-inbox"></i>
-                                <h4>Заявки не найдены</h4>
-                                <p>{{ hasActiveListFilters ? 'Измените параметры фильтрации и попробуйте ещё раз.' : 'У вас пока нет созданных заявок на справки.' }}</p>
-                            </div>
-                        </template>
-
-                        <Column field="number" header="№" style="width: 110px;" />
-                        <Column field="requestType.name" header="Тип справки" style="min-width: 260px;">
-                            <template #body="{ data }">
-                                <div class="tickets-student-table-main">
-                                    <strong>{{ data.requestType?.name || 'Не указан' }}</strong>
-                                    <small>{{ data.summary }}</small>
-                                </div>
-                            </template>
-                        </Column>
-                        <Column field="status" header="Статус" style="width: 170px;">
-                            <template #body="{ data }">
-                                <Tag
-                                    :severity="getStatusSeverity(data.status)"
-                                    :value="getStatusLabel(data.status)"
-                                    :icon="getStatusIcon(data.status)"
-                                />
-                            </template>
-                        </Column>
-                        <Column field="priority" header="Приоритет" style="width: 150px;">
-                            <template #body="{ data }">
-                                <Tag
-                                    :severity="getPrioritySeverity(data.priority)"
-                                    :value="getPriorityLabel(data.priority)"
-                                />
-                            </template>
-                        </Column>
-                        <Column field="createdAt" header="Создана" style="width: 180px;">
-                            <template #body="{ data }">
-                                {{ formatDate(data.createdAt) }}
-                            </template>
-                        </Column>
-                        <Column field="updatedAt" header="Обновлена" style="width: 180px;">
-                            <template #body="{ data }">
-                                {{ formatDate(data.updatedAt) }}
-                            </template>
-                        </Column>
-                        <Column header="Файлы" style="width: 170px;">
-                            <template #body="{ data }">
-                                <Button
-                                    label="Открыть"
-                                    icon="pi pi-paperclip"
-                                    severity="secondary"
-                                    outlined
-                                    class="tickets-student-table-action"
-                                    @click="openTicketDetails(data)"
-                                />
-                            </template>
-                        </Column>
-                    </DataTable>
+                    />
                 </section>
             </template>
         </section>
@@ -245,7 +168,6 @@ import { computed, onMounted, ref } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { usePermissionStore } from '@/stores/permissions.js';
 import { formatDateRuLongWithTime as formatDate } from '@/utils/date.js';
-import { useResponsiveLayout } from '@/composables/useResponsiveLayout.js';
 import { listMyTickets } from '@/api/tickets.js';
 import PermissionDenied from '@/components/Utils/PermissionDenied.vue';
 import StudentTicketDetailsDialog from '@/components/Tickets/StudentTicketDetailsDialog.vue';
@@ -253,21 +175,20 @@ import StudentTicketCreateDialog from '@/components/Tickets/StudentTicketCreateD
 
 const toast = useToast();
 const permissionStore = usePermissionStore();
-const { isPhone } = useResponsiveLayout();
 
 const listLoading = ref(false);
 
 const studentTickets = ref([]);
 const totalRecords = ref(0);
 const currentPage = ref(1);
-const rowsPerPage = ref(10);
+const rowsPerPage = ref(12);
 const ticketDetailsVisible = ref(false);
 const selectedTicketId = ref('');
 const createTicketDialogRef = ref(null);
 const rowsPerPageOptions = [
-    { label: '5', value: 5 },
-    { label: '10', value: 10 },
-    { label: '20', value: 20 },
+    { label: '12', value: 12 },
+    { label: '24', value: 24 },
+    { label: '48', value: 48 },
 ];
 
 const listFilters = ref({
@@ -277,8 +198,6 @@ const listFilters = ref({
 });
 
 const showFilters = ref(false);
-
-const listSectionRef = ref(null);
 
 const canReadStudentTickets = computed(() => permissionStore.hasPermission('TicketsStudent', 'Read'));
 const canCreateStudentTickets = computed(() => permissionStore.hasPermission('TicketsStudent', 'Create'));
@@ -461,13 +380,6 @@ const onPage = async (event) => {
     await fetchStudentTickets();
 };
 
-const scrollToList = () => {
-    listSectionRef.value?.scrollIntoView?.({
-        behavior: 'smooth',
-        block: 'start',
-    });
-};
-
 const openTicketDetails = (ticket) => {
     if (!ticket?.id) return;
 
@@ -602,89 +514,146 @@ onMounted(async () => {
 
 .tickets-student-list-filters {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(clamp(200px, 30vw, 280px), 1fr));
+    align-items: start;
     gap: 0.75rem;
-    align-items: center;
+    padding: 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--tickets-student-border);
+    background: rgba(var(--p-blue-500-rgb), 0.03);
+    min-width: 0;
+}
+
+.tickets-student-list-filters > * {
+    min-width: 0;
+}
+
+.tickets-student-list-filters :deep(.p-select),
+.tickets-student-list-filters :deep(.p-inputtext) {
+    width: 100%;
 }
 
 .tickets-student-rows-select {
     max-width: 12rem;
 }
 
-.tickets-student-mobile-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.tickets-student-mobile-cards {
-    display: flex;
-    flex-direction: column;
+.tickets-student-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(clamp(260px, 45vw, 340px), 1fr));
     gap: 0.85rem;
 }
 
-.tickets-student-mobile-card {
+.tickets-student-grid-card {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 0.9rem;
     padding: 1rem;
-    border-radius: 16px;
+    border-radius: 18px;
     border: 1px solid var(--tickets-student-border);
-    background: rgba(var(--p-blue-500-rgb), 0.04);
+    background: linear-gradient(
+        180deg,
+        var(--tickets-student-soft-bg),
+        rgba(255, 255, 255, 0)
+    );
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.tickets-student-mobile-card-head {
+.tickets-student-grid-card:hover {
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1);
+    transform: translateY(-2px);
+}
+
+.tickets-student-grid-head,
+.tickets-student-grid-number {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 0.75rem;
-}
-
-.tickets-student-mobile-card-head strong,
-.tickets-student-mobile-card-head span {
-    display: block;
-}
-
-.tickets-student-mobile-card-head span {
-    margin-top: 0.25rem;
-    color: var(--p-grey-1);
-}
-
-.tickets-student-mobile-meta {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     gap: 0.75rem;
-    flex-wrap: wrap;
 }
 
-.tickets-student-mobile-summary {
-    color: var(--p-text-color);
-    line-height: 1.5;
-}
-
-.tickets-student-mobile-actions {
-    display: flex;
+.tickets-student-grid-number {
     justify-content: flex-start;
 }
 
-.tickets-student-table-main {
+.tickets-student-grid-number .pi {
+    font-size: 1.3rem;
+}
+
+.tickets-student-grid-summary {
+    font-weight: 600;
+    font-size: 1.02rem;
+    line-height: 1.35;
+    color: var(--p-text-color);
+}
+
+.tickets-student-grid-fields {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.5rem;
 }
 
-.tickets-student-table-main small {
-    color: var(--p-grey-1);
-    line-height: 1.4;
+.tickets-student-grid-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
 }
 
-.tickets-student-table :deep(.p-datatable-table-container) {
-    min-height: 12rem;
+.tickets-student-grid-field-label {
+    flex: 0 0 auto;
+    color: var(--p-text-muted-color, var(--p-grey-2));
+    font-size: 0.85rem;
+    white-space: nowrap;
 }
 
-.tickets-student-table-action {
-    width: 100%;
+.tickets-student-grid-field-label::after {
+    content: ':';
+}
+
+.tickets-student-grid-field-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.32rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(var(--p-blue-500-rgb), 0.08);
+    font-size: 0.82rem;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tickets-student-grid-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+
+.tickets-student-grid-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--p-text-muted-color, var(--p-grey-2));
+}
+
+.tickets-student-grid-value {
+    color: var(--p-text-color);
+    line-height: 1.45;
+}
+
+.clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .tickets-student-empty-state {
@@ -712,12 +681,6 @@ onMounted(async () => {
     color: var(--p-grey-1);
 }
 
-@media (max-width: 1100px) {
-    .tickets-student-list-filters {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
 @media (max-width: 768px) {
     .tickets-student-shell {
         padding: 1rem;
@@ -734,13 +697,16 @@ onMounted(async () => {
     }
 
     .tickets-student-list-filters {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .tickets-student-grid {
         grid-template-columns: 1fr;
     }
 
-    .tickets-student-mobile-card-head,
-    .tickets-student-mobile-meta {
+    .tickets-student-grid-head {
         flex-direction: column;
-        align-items: stretch;
+        align-items: flex-start;
     }
 }
 </style>

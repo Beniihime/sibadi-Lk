@@ -1,23 +1,88 @@
 <template>
-    <main>
+    <main :class="{ 'sidebar-hidden': activeProfile !== 'external' }">
 
-        <!-- Сайдбар перключения профилей -->
-        <aside class="sidebar">
+        <!-- Краткая сводка профиля: ФИО, почта, роли (всегда виден, на мобильном — самым верхним) -->
+        <div class="profile-summary">
+            <div class="profile-card profile-card-user">
+                <!-- <div class="profile-header">
+                    <img src="../assets/backgrounds/profBack.webp" alt="Profile Header" class="header-image"/>
+                </div> -->
+                <div class="row mx-0 profile-user-header">
+                    <div class="col-auto d-flex align-items-center justify-content-center profile-user-avatar-col">
+                        <div
+                            class="avatar-wrapper"
+                            :class="{ 'avatar-wrapper-dragover': isAvatarDragOver }"
+                            @dragover.prevent="onAvatarDragOver"
+                            @dragleave.prevent="onAvatarDragLeave"
+                            @drop.prevent="onAvatarDrop"
+                        >
+                            <Avatar :image="srcAvatar" icon="pi pi-user fs-1" size="large" shape="circle" style="transition: all 0.5s;" />
+                            <div class="avatar-overlay" @click="triggerFileUpload">
+                                <div class="avatar-overlay-copy">
+                                    <div class="upload-button pi pi-camera" />
+                                    <small>{{ isAvatarDragOver ? 'Отпустите изображение' : 'Нажмите или перетащите фото' }}</small>
+                                </div>
+                                <input
+                                    ref="fileInput"
+                                    type="file"
+                                    style="display: none"
+                                    accept="image/*"
+                                    @change="onFileSelect"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col d-flex align-items-center profile-user-main-col">
+                        <div class="profile-body w-100">
+                            <div class="row justify-content-between profile-user-summary-row">
+                                <div class="col">
+                                    <h2>{{ fullName }}</h2>
+                                    <p class="profile-email">{{ email }}</p>
+                                    <div class="profile-role">
+                                        <template v-if="userRoles.length > 0">
+                                            <Chip v-for="ur in userRoles" :key="ur.id" class="role-label">
+                                                <span class="roleType" :class="getRoleTypeClass(ur)">
+                                                    {{ ur.type[0] }}
+                                                </span>
+                                                <span>{{ ur.title }}</span>
+                                            </Chip>
+                                        </template>
+                                        <template v-else>
+                                            <Tag severity="warn">Нет ролей</Tag>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="col-auto d-flex align-items-center profile-user-action-col">
+                                    <UpdateUser v-if="!isCurrentUser && hasPermission('User', 'Update')" :userId="userId" @roles-changed="reloadProfile"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Переключатель разделов профиля (полоса, как выбор года в расписании) -->
+        <div class="profile-tabs">
+            <button type="button" :class="{ active: activeProfile === 'user' }" @click="setActiveProfile('user')">Профиль ЛКС</button>
+            <button type="button" :class="{ active: activeProfile === 'permiss' }" @click="setActiveProfile('permiss')">Полномочия</button>
+            <button type="button" :class="{ active: activeProfile === 'external' }" @click="setActiveProfile('external')">Внешние системы</button>
+            <button type="button" :class="{ active: activeProfile === 'requisites' }" @click="setActiveProfile('requisites')">Реквизиты для оплаты</button>
+        </div>
+
+        <!-- Сайдбар внешних систем (только на вкладке «Внешние системы») -->
+        <aside v-if="activeProfile === 'external'" class="sidebar">
             <div class="button-group">
-                <Button label="Профиль ЛКС" unstyled icon="pi pi-user me-3" @click="setActiveProfile('user')" :class="{ 'active-link': activeProfile === 'user' }" class="menu-item w-100 mb-3"/>
-                <Button unstyled label="Полномочия" icon="pi pi-lock me-3" @click="setActiveProfile('permiss')" :class="{ 'active-link': activeProfile === 'permiss' }" class="menu-item w-100 mb-3"/>
-
-                <Divider />
                 <div class="external-systems-title">Внешние системы</div>
                 <div class="external-systems-list">
                     <Button
                         v-for="account in externalAccounts"
-                        :key="account.id"
+                        :key="accountKey(account)"
                         unstyled
                         icon="pi pi-external-link me-3"
                         :label="getSystemTypeLabel(account.systemType)"
                         @click="openExternalAccount(account)"
-                        :class="{ 'active-link': activeProfile === 'external' && selectedExternalAccount?.id === account.id }"
+                        :class="{ 'active-link': activeProfile === 'external' && accountKey(selectedExternalAccount) === accountKey(account) }"
                         class="menu-item w-100 mb-2"
                     />
                     <Button
@@ -30,70 +95,6 @@
                     />
                 </div>
             </div>
-
-            <GetOtpButton 
-                v-if="hasPermission('User', 'Update')"
-                :userId="userId"
-                :buttonLabel="'Получить OTP'"
-                :showLabel="true"
-                :buttonSeverity="'help'"
-                class="w-100 mb-3"
-            />
-
-            <!-- Изменить пароль -->
-            <Button class="w-100 mb-3" label="Сменить пароль" icon="pi pi-key" outlined @click="visible = true" v-if="!isCurrentUser && hasPermission('User', 'Update')" />
-            <Dialog v-model:visible="visible" modal header="Изменить пароль" :style="{ 'max-width': '30rem' }">
-                <form>
-                    <FloatLabel class="mt-4">
-                        <Password v-model="userPassword" inputId="userPassword" toggleMask class="form-input" @input="validatePassword" :feedback="false" :invalid="!passwordChecks.length || !passwordChecks.upperLower || !passwordChecks.number" />
-                        <label for="userPassword">Пароль</label>
-                    </FloatLabel>
-                </form>
-                <div class="password-requirements my-3">
-                    <p><i :class="passwordChecks.length ? 'pi pi-thumbs-up text-success' : 'pi pi-thumbs-down text-danger'" class="me-2"/> Минимум 8 символов</p>
-                    <p><i :class="passwordChecks.upperLower ? 'pi pi-thumbs-up text-success' : 'pi pi-thumbs-down text-danger'" class="me-2"/> Верхний и нижний регистры</p>
-                    <p><i :class="passwordChecks.number ? 'pi pi-thumbs-up text-success' : 'pi pi-thumbs-down text-danger'" class="me-2"/> Минимум одна цифра</p>
-                </div>
-                <Button label="Сохранить" class="w-100 text-center" @click="changePassword"/>
-            </Dialog>
-
-            <!-- Изменить о себе -->
-            <div v-if="isCurrentUser">
-                <Button label="Сменить пароль" text icon="pi pi-key" class="d-flex justify-content-between w-100" iconPos="right" @click="visiblePass = true" />
-                <Dialog v-model:visible="visiblePass" modal header="Сменить пароль" :style="{ 'max-width': '25rem' }">
-                    <form>
-                        <div class="">
-                            <label for="oldPass" class="ms-2">Старый пароль</label>
-                            <Password :inputProps="{ autocomplete: 'off' }" inputId="oldPass" name="oldPass" v-model="oldPass" class="form-input w-100" :feedback="false" toggleMask placeholder="Введите пароль" />
-                        </div>
-                        <div class="mt-2">
-                            <label for="newPass" class="ms-2">Новый пароль</label>
-                            <Password inputId="newPass" name="newPass" v-model="newPass" class="form-input w-100" :feedback="false" toggleMask @input="validateMePassword" :invalid="!passwordChecks.length || !passwordChecks.upperLower || !passwordChecks.number" autocomplete="off" placeholder="Введите новый пароль"/>
-                        </div>
-                        <div class="password-requirements my-3 mx-2">
-                            <p><i :class="passwordChecks.length ? 'pi pi-thumbs-up text-success' : 'pi pi-thumbs-down text-danger'" class="me-2"/> Минимум 8 символов</p>
-                            <p><i :class="passwordChecks.upperLower ? 'pi pi-thumbs-up text-success' : 'pi pi-thumbs-down text-danger'" class="me-2"/> Верхний и нижний регистры</p>
-                            <p><i :class="passwordChecks.number ? 'pi pi-thumbs-up text-success' : 'pi pi-thumbs-down text-danger'" class="me-2"/> Минимум одна цифра</p>
-                        </div>
-                        <div class="">
-                            <label for="confirmPass" class="ms-2">Подтвердите новый пароль</label>
-                            <Password inputId="confirmPass" name="confirmPass" v-model="confirmPass" class="form-input w-100" :feedback="false" toggleMask :invalid="newPass !== confirmPass && confirmPass" />
-                        </div>
-                        <Button label="Сохранить" icon="pi pi-check" class="w-100 mt-4" @click="changeMePass"/>
-                    </form>
-                </Dialog>
-            </div>
-
-            
-            <!-- Кнопка блокировки -->
-            <Button 
-                v-if="!isCurrentUser && hasPermission('User', 'Update')"
-                :label="blockButtonLabel" 
-                class="w-100 block-button" 
-                :severity="blockButtonSeverity" 
-                text 
-                @click="toggleUserBlock"
-            />
 
             <Dialog v-model:visible="showAddExternalDialog" modal header="Добавить внешний аккаунт" :style="{ 'max-width': '40rem', width: '100%' }">
                 <div class="external-form-grid">
@@ -214,63 +215,6 @@
             </Breadcrumb>
 
             <div v-if="activeProfile === 'user'">
-                <div class="profile-card profile-card-user">
-                    <!-- <div class="profile-header">
-                        <img src="../assets/backgrounds/profBack.webp" alt="Profile Header" class="header-image"/>
-                    </div> -->
-                    <div class="row mx-0 profile-user-header">
-                        <div class="col-auto d-flex align-items-center justify-content-center profile-user-avatar-col">
-                            <div
-                                class="avatar-wrapper"
-                                :class="{ 'avatar-wrapper-dragover': isAvatarDragOver }"
-                                @dragover.prevent="onAvatarDragOver"
-                                @dragleave.prevent="onAvatarDragLeave"
-                                @drop.prevent="onAvatarDrop"
-                            >
-                                <Avatar :image="srcAvatar" icon="pi pi-user fs-1" size="large" shape="circle" style="transition: all 0.5s;" />
-                                <div class="avatar-overlay" @click="triggerFileUpload">
-                                    <div class="avatar-overlay-copy">
-                                        <div class="upload-button pi pi-camera" />
-                                        <small>{{ isAvatarDragOver ? 'Отпустите изображение' : 'Нажмите или перетащите фото' }}</small>
-                                    </div>
-                                    <input 
-                                        ref="fileInput" 
-                                        type="file" 
-                                        style="display: none" 
-                                        accept="image/*"
-                                        @change="onFileSelect"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col d-flex align-items-center profile-user-main-col">
-                            <div class="profile-body w-100">
-                                <div class="row justify-content-between profile-user-summary-row">
-                                    <div class="col">
-                                        <h2>{{ fullName }}</h2>
-                                        <p class="profile-email">{{ email }}</p>
-                                        <div class="profile-role">
-                                            <template v-if="userRoles.length > 0">
-                                                <Chip v-for="ur in userRoles" :key="ur.id" class="role-label">
-                                                    <span class="roleType" :class="getRoleTypeClass(ur)">
-                                                        {{ ur.type[0] }}
-                                                    </span>
-                                                    <span>{{ ur.title }}</span>
-                                                </Chip>
-                                            </template>
-                                            <template v-else>
-                                                <Tag severity="warn">Нет ролей</Tag>
-                                            </template>
-                                        </div>
-                                    </div>
-                                    <div class="col-auto d-flex align-items-center profile-user-action-col">
-                                        <UpdateUser v-if="!isCurrentUser && hasPermission('User', 'Update')" :userId="userId"/>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
                 <div class="profile-card profile-card-user-secondary" style="margin-top: 10px;">
                     <div class="profile-info-header">
                         <div>
@@ -296,10 +240,55 @@
                             <div class="field">Email</div>
                             <div class="value">{{ email }}</div>
                         </div>
-                        <!-- <div class="info-card">
-                            <span class="field">Телефон</span>
-                        </div> -->
+                        <div class="info-card">
+                            <div class="field">Дата рождения</div>
+                            <div class="value">{{ birthDate ? formatDateRuShort(birthDate) : '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Телефон</div>
+                            <div class="value">{{ phone || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: серия</div>
+                            <div class="value">{{ passportSerial || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: номер</div>
+                            <div class="value">{{ passportNumber || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: дата выдачи</div>
+                            <div class="value">{{ passportDateIssue ? formatDateRuShort(passportDateIssue) : '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Паспорт: кем выдан</div>
+                            <div class="value">{{ passportIssuedBy || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">СНИЛС</div>
+                            <div class="value">{{ snils || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Адрес регистрации</div>
+                            <div class="value">{{ registrationAddress || '-' }}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="field">Гражданство</div>
+                            <div class="value">{{ citizenshipId || '-' }}</div>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Кнопка блокировки пользователя -->
+                <div v-if="!isCurrentUser && hasPermission('User', 'Update')" class="profile-block-row">
+                    <Button
+                        :label="blockButtonLabel"
+                        :severity="blockButtonSeverity"
+                        icon="pi pi-ban"
+                        class="w-100"
+                        outlined
+                        @click="toggleUserBlock"
+                    />
                 </div>
             </div>
 
@@ -339,7 +328,7 @@
                         <div class="external-meta-grid">
                             <div class="external-meta-card">
                                 <div class="external-meta-label">ID связки</div>
-                                <div class="external-meta-value">{{ selectedExternalAccount.id }}</div>
+                                <div class="external-meta-value">{{ accountKey(selectedExternalAccount) }}</div>
                             </div>
                             <div class="external-meta-card">
                                 <div class="external-meta-label">User ID в системе</div>
@@ -569,6 +558,9 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Реквизиты для оплаты -->
+            <PaymentRequisites v-if="activeProfile === 'requisites'" :user-id="userId" :is-current-user="isCurrentUser" />
         </div>
     </main>
 </template>
@@ -585,8 +577,7 @@ import { formatDateRuShort } from '@/utils/date.js';
 
 import UpdateUser from '@/components/Users/UpdateUser.vue';
 import MePermissionsPage from '@/views/MePermissionsPage.vue';
-
-import GetOtpButton from '@/components/Users/GetOtpButton.vue';
+import PaymentRequisites from '@/components/Profile/PaymentRequisites.vue';
 
 const permissionStore = usePermissionStore();
 const router = useRouter();
@@ -675,9 +666,23 @@ const isAdmin = computed(() => currentUserRoleIds.value.includes(1));
 
 const isBlocked = ref(null);
 
+const birthDate = ref('');
+const phone = ref('');
+const passportSerial = ref('');
+const passportNumber = ref('');
+const passportDateIssue = ref('');
+const passportIssuedBy = ref('');
+const snils = ref('');
+const registrationAddress = ref('');
+const citizenshipId = ref('');
+
 const externalAccounts = ref([]);
 const externalAccountsLoading = ref(false);
 const selectedExternalAccount = ref(null);
+
+// Внешние аккаунты не имеют собственного id на стороне SSO, поэтому для выбора
+// используем составной ключ (тип системы + id в этой системе) — он уникален.
+const accountKey = (account) => `${account?.systemType ?? ''}::${account?.userIdInOtherSystem ?? ''}`;
 const showAddExternalDialog = ref(false);
 const showEditExternalDialog = ref(false);
 const showDeleteExternalDialog = ref(false);
@@ -702,6 +707,10 @@ const isExternalInfoStructured = ref(false);
 
 const blockButtonLabel = computed(() => (isBlocked.value ? 'Разблокировать' : 'Заблокировать'));
 const blockButtonSeverity = computed(() => (isBlocked.value ? 'success' : 'danger'));
+
+const reloadProfile = () => {
+    fetchUserProfile(userId.value);
+};
 
 const toggleUserBlock = async () => {
     try {
@@ -1179,8 +1188,8 @@ const fetchExternalAccounts = async () => {
             return;
         }
 
-        const selectedId = selectedExternalAccount.value?.id;
-        selectedExternalAccount.value = externalAccounts.value.find(a => a.id === selectedId) || externalAccounts.value[0];
+        const selectedKey = accountKey(selectedExternalAccount.value);
+        selectedExternalAccount.value = externalAccounts.value.find(a => accountKey(a) === selectedKey) || externalAccounts.value[0];
     } catch (error) {
         console.debug('Ошибка при получении внешних аккаунтов: ', error);
         externalAccounts.value = [];
@@ -1469,14 +1478,24 @@ const fetchUserProfile = async (id) => {
         userRoles.value = profile.roles || [];
         isBlocked.value = profile.isBlocked;
 
+        birthDate.value = profile.birthDate || '';
+        phone.value = (Array.isArray(profile.phones) && profile.phones.length) ? profile.phones[0] : '';
+        passportSerial.value = profile.passportSerial || '';
+        passportNumber.value = profile.passportNumber || '';
+        passportDateIssue.value = profile.passportDateIssue || '';
+        passportIssuedBy.value = profile.passportIssuedBy || '';
+        snils.value = profile.snils || '';
+        registrationAddress.value = profile.registrationAddress || '';
+        citizenshipId.value = profile.citizenshipId || '';
+
         // The user payload includes external accounts; use it for the initial
         // profile state instead of requesting `other-accounts/getall` again.
         if (Array.isArray(profile.externalAccounts)) {
             externalAccounts.value = profile.externalAccounts;
             statusInfra = getInfraExternalAccount(externalAccounts.value);
             status.value = Boolean(statusInfra);
-            const selectedId = selectedExternalAccount.value?.id;
-            selectedExternalAccount.value = externalAccounts.value.find((account) => account.id === selectedId)
+            const selectedKey = accountKey(selectedExternalAccount.value);
+            selectedExternalAccount.value = externalAccounts.value.find((account) => accountKey(account) === selectedKey)
                 || externalAccounts.value[0]
                 || null;
         }
@@ -1534,6 +1553,7 @@ onMounted(async () => {
 main {
     position: relative;
     display: flex;
+    flex-direction: column;
     height: 100%;
     padding: var(--app-page-padding-y) var(--app-page-padding-x);
     gap: 10px;
@@ -1605,6 +1625,9 @@ main {
 .block-button {
     margin-top: auto;
 }
+.profile-block-row {
+    margin-top: 1rem;
+}
 .avatar-wrapper {
     position: relative;
     border-radius: 50%;
@@ -1658,11 +1681,46 @@ main {
 }
 .content-wrap {
     flex: 1;
-    width: 100%;
+    width: auto;
     margin-left: 210px;
     padding-inline: 10px;
     overflow-y: auto;
     color: var(--p-text-color);
+}
+.profile-summary {
+    width: auto;
+    margin-left: 210px;
+    padding-inline: 10px;
+}
+main.sidebar-hidden .profile-summary,
+main.sidebar-hidden .profile-tabs,
+main.sidebar-hidden .content-wrap {
+    margin-left: 0;
+}
+.profile-tabs {
+    width: auto;
+    margin-left: 210px;
+    padding-inline: 10px;
+    display: flex;
+    gap: 0.5rem;
+}
+.profile-tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.62rem 0.78rem;
+    border: 1px solid var(--p-grey-4);
+    border-radius: 0.75rem;
+    color: var(--p-text-color);
+    background: var(--p-bg-color-1);
+    cursor: pointer;
+    font-weight: 700;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+.profile-tabs button:hover,
+.profile-tabs button.active {
+    border-color: color-mix(in srgb, var(--p-primary-color) 55%, transparent);
+    color: var(--p-primary-color);
+    background: color-mix(in srgb, var(--p-primary-color) 13%, transparent);
 }
 .profile-breadcrumbs {
     margin-bottom: 12px;
@@ -2156,6 +2214,29 @@ p {
         padding-inline: 0;
         overflow: visible;
         padding-bottom: var(--app-mobile-bottom-offset);
+    }
+
+    .profile-summary {
+        order: -1;
+        margin-left: 0;
+        padding-inline: 0;
+    }
+
+    .profile-tabs {
+        margin-left: 0;
+        padding-inline: 0;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .profile-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .profile-tabs button {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     .profile-user-header {

@@ -3,14 +3,15 @@
         <div class="content-wrapper">
             <Transition name="content-fade" mode="out-in">
                 <div v-if="isFirstLoadDone" key="users-content">
-                    <section v-if="isCardMode" class="users-mobile-layout">
-                        <div class="users-mobile-toolbar">
+                    <div class="users-filters-bar">
+                        <div class="users-filters-head">
                             <div>
                                 <h3 class="m-0">Пользователи</h3>
-                                <p class="users-mobile-subtitle">Управление профилями, ролями и доступом.</p>
+                                <p v-if="isCardMode" class="users-mobile-subtitle">Управление профилями, ролями и доступом.</p>
                             </div>
-                            <div class="users-mobile-toolbar-actions">
+                            <div class="users-filters-actions">
                                 <Button
+                                    v-if="isCardMode"
                                     icon="pi pi-sliders-h"
                                     outlined
                                     severity="secondary"
@@ -20,7 +21,18 @@
                                     icon="pi pi-filter"
                                     outlined
                                     severity="secondary"
-                                    @click="showMobileFilters = !showMobileFilters"
+                                    :class="{ 'users-filter-toggle--active': showFilters }"
+                                    :badge="activeFilterCount ? String(activeFilterCount) : undefined"
+                                    @click="showFilters = !showFilters"
+                                />
+                                <MultiSelect
+                                    v-if="!isCardMode"
+                                    :modelValue="selectedColumns"
+                                    :options="columns"
+                                    optionLabel="header"
+                                    @update:modelValue="onToggle"
+                                    display="chip"
+                                    placeholder="Выберите поля"
                                 />
                                 <CreateUser v-if="hasPermission('User', 'Create')" />
                                 <Button
@@ -34,66 +46,50 @@
                             </div>
                         </div>
 
-                        <OverlayPanel ref="specialUsersPanel">
-                            <div class="special-users-panel">
-                                <Button
-                                    label="Синхронизировать с InfraManager"
-                                    icon="pi pi-sync"
-                                    :loading="syncLoading"
-                                    :disabled="syncLoading"
-                                    @click="syncPasImAccounts"
-                                />
-                                <Button
-                                    label="Синхронизировать с 1СЗКГУ"
-                                    icon="pi pi-sync"
-                                    :loading="syncLoading"
-                                    :disabled="syncLoading"
-                                    @click="syncPasOneCzkguAccounts"
+                        <div v-if="showFilters" class="users-filters">
+                            <div class="users-filter-field">
+                                <label>ФИО</label>
+                                <InputText
+                                    :model-value="filters.name"
+                                    placeholder="Поиск по ФИО"
+                                    @update:model-value="(value) => onFilter('name', value)"
                                 />
                             </div>
-                        </OverlayPanel>
-
-                        <div v-if="showMobileFilters" class="users-mobile-filters">
-                            <InputText
-                                :model-value="filters.lastName"
-                                placeholder="Поиск по фамилии"
-                                @update:model-value="(value) => onFilter('lastName', value)"
-                            />
-                            <InputText
-                                :model-value="filters.firstName"
-                                placeholder="Поиск по имени"
-                                @update:model-value="(value) => onFilter('firstName', value)"
-                            />
-                            <InputText
-                                :model-value="filters.middleName"
-                                placeholder="Поиск по отчеству"
-                                @update:model-value="(value) => onFilter('middleName', value)"
-                            />
-                            <InputText
-                                :model-value="filters.email"
-                                placeholder="Поиск по E-mail"
-                                @update:model-value="(value) => onFilter('email', value)"
-                            />
-                            <MultiSelect
-                                v-model="filters.roleIds"
-                                :options="roles"
-                                optionLabel="title"
-                                optionValue="id"
-                                :maxSelectedLabels="1"
-                                display="chip"
-                                placeholder="Выберите роли"
-                                @change="onFilter('roleIds', $event.value)"
-                            />
-                            <Select
-                                v-model="filters.isBlocked"
-                                :options="statusOptions"
-                                optionLabel="label"
-                                optionValue="value"
-                                placeholder="Выберите статус"
-                                @change="onFilter('isBlocked', $event.value)"
-                            />
-                            <div class="users-mobile-filter-actions">
+                            <div class="users-filter-field">
+                                <label>E-mail</label>
+                                <InputText
+                                    :model-value="filters.email"
+                                    placeholder="Поиск по E-mail"
+                                    @update:model-value="(value) => onFilter('email', value)"
+                                />
+                            </div>
+                            <div class="users-filter-field">
+                                <label>Роли</label>
+                                <MultiSelect
+                                    v-model="filters.roleIds"
+                                    :options="roles"
+                                    optionLabel="title"
+                                    optionValue="id"
+                                    :maxSelectedLabels="1"
+                                    display="chip"
+                                    placeholder="Выберите роли"
+                                    @change="onFilter('roleIds', $event.value)"
+                                />
+                            </div>
+                            <div class="users-filter-field">
+                                <label>Статус</label>
                                 <Select
+                                    v-model="filters.isBlocked"
+                                    :options="statusOptions"
+                                    optionLabel="label"
+                                    optionValue="value"
+                                    placeholder="Выберите статус"
+                                    @change="onFilter('isBlocked', $event.value)"
+                                />
+                            </div>
+                            <div class="users-filter-actions">
+                                <Select
+                                    v-if="isCardMode"
                                     v-model="rowsPerPage"
                                     :options="rowsPerPageOptions"
                                     optionLabel="label"
@@ -105,11 +101,13 @@
                                     label="Сбросить"
                                     text
                                     severity="secondary"
-                                    @click="resetMobileFilters"
+                                    @click="resetFilters"
                                 />
                             </div>
                         </div>
+                    </div>
 
+                    <section v-if="isCardMode" class="users-mobile-layout">
                         <div class="users-mobile-summary">
                             <span>Всего пользователей: {{ totalRecords }}</span>
                             <span>Показано: {{ currentPageCustomers.length }}</span>
@@ -160,12 +158,6 @@
                                 </div>
 
                                 <div class="users-card-actions">
-                                    <GetOtpButton
-                                        :userId="customer.id"
-                                        :buttonClass="'p-button-sm'"
-                                        :showLabel="true"
-                                        :buttonLabel="'OTP'"
-                                    />
                                     <Button
                                         label="Профиль"
                                         size="small"
@@ -202,57 +194,7 @@
                         :totalRecords="totalRecords"
                         @page="onPage"
                         :rowsPerPageOptions="[5, 10, 15]"
-                        filterDisplay="row"
                     >
-                    <template #header>
-                        <div class="d-flex justify-content-between align-items-center users-table-header">
-                            <h3 class="m-0 ps-4">Пользователи</h3>
-                            <div class="d-flex gap-2 users-table-actions">
-                                <Button
-                                    icon="pi pi-sliders-h"
-                                    outlined
-                                    severity="secondary"
-                                    @click="toggleSpecialUsersPanel"
-                                />
-                                <OverlayPanel ref="specialUsersPanel">
-                                    <div class="special-users-panel">
-                                        <Button
-                                            label="Синхронизировать с InfraManager"
-                                            icon="pi pi-sync"
-                                            :loading="syncLoading"
-                                            :disabled="syncLoading"
-                                            @click="syncPasImAccounts"
-                                        />
-                                        <Button
-                                            label="Синхронизировать с 1СЗКГУ"
-                                            icon="pi pi-sync"
-                                            :loading="syncLoading"
-                                            :disabled="syncLoading"
-                                            @click="syncPasOneCzkguAccounts"
-                                        />
-                                    </div>
-                                </OverlayPanel>
-                                <MultiSelect
-                                    :modelValue="selectedColumns"
-                                    :options="columns"
-                                    optionLabel="header"
-                                    @update:modelValue="onToggle"
-                                    display="chip"
-                                    placeholder="Выберите поля"
-                                />
-                                <CreateUser v-if="hasPermission('User', 'Create')" />
-                                <Button
-                                    icon="pi pi-sync"
-                                    outlined
-                                    severity="secondary"
-                                    @click="fetchCustomers"
-                                    :loading="loading"
-                                    :disabled="loading"
-                                />
-                            </div>
-                        </div>
-                    </template>
-
                     <template #paginatorstart>
                         <div class="d-flex justify-content-between align-items-center">
                             <div>Всего пользователей: {{ totalRecords }}</div>
@@ -266,36 +208,15 @@
                     <template #empty>Не найдено.</template>
                     <template #loading>Данные загружаются. Подождите.</template>
 
-                    <Column header="OTP" :showFilterMenu="false" :exportable="false" style="min-width: 60px;">
-                        <template #body="{ data }">
-                            <GetOtpButton
-                                :userId="data.id"
-                                :buttonClass="'p-button-sm me-2'"
-                                :showLabel="false"
-                            />
-                        </template>
-                    </Column>
-
                     <Column
                         v-for="col in ordinaryColumns"
                         :field="col.field"
                         :key="col.field"
                         :header="col.header"
-                        :showFilterMenu="false"
                         :style="col.style"
-                    >
-                        <template #filter>
-                            <InputText
-                                :value="filters[col.field]"
-                                :placeholder="col.placeholder"
-                                @input="event => onFilter(col.field, event.target.value)"
-                                autocomplete="off"
-                                class="w-75"
-                            />
-                        </template>
-                    </Column>
+                    />
 
-                    <Column field="roleIds" header="Роли" :showFilterMenu="false" v-if="selectedColumnFields.includes('roleIds')" style="min-width: 280px;">
+                    <Column field="roleIds" header="Роли" v-if="selectedColumnFields.includes('roleIds')" style="min-width: 280px;">
                         <template #body="{ data }">
                             <div class="role-label-container">
                                 <Chip v-if="data.roles.length > 0" class="role-label">
@@ -322,34 +243,13 @@
                                 </Popover>
                             </div>
                         </template>
-                        <template #filter>
-                            <MultiSelect
-                                v-model="filters.roleIds"
-                                :options="roles"
-                                optionLabel="title"
-                                optionValue="id"
-                                :maxSelectedLabels="1"
-                                placeholder="Выберите роли"
-                                @change="onFilter('roleIds', $event.value)"
-                            />
-                        </template>
                     </Column>
-                    <Column field="isBlocked" header="Статус" :showFilterMenu="false" v-if="selectedColumnFields.includes('isBlocked')">
+                    <Column field="isBlocked" header="Статус" v-if="selectedColumnFields.includes('isBlocked')">
                         <template #body="{ data }">
                             <Tag
                                 :severity="data.isBlocked ? 'danger' : 'success'"
                                 :value="data.isBlocked ? 'Заблокирован' : 'Активен'"
                                 :icon="data.isBlocked ? 'pi pi-times' : 'pi pi-check'"
-                            />
-                        </template>
-                        <template #filter>
-                            <Select
-                                v-model="filters.isBlocked"
-                                :options="statusOptions"
-                                optionLabel="label"
-                                optionValue="value"
-                                placeholder="Выберите статус"
-                                @change="onFilter('isBlocked', $event.value)"
                             />
                         </template>
                     </Column>
@@ -418,7 +318,6 @@ import { useResponsiveLayout } from '@/composables/useResponsiveLayout.js';
 import { useMobileTableView } from '@/composables/useMobileTableView.js';
 
 import CreateUser from '@/components/Users/CreateUser.vue';
-import GetOtpButton from '@/components/Users/GetOtpButton.vue';
 import { usePermissionStore } from '@/stores/permissions.js';
 
 const router = useRouter();
@@ -444,9 +343,7 @@ const hasPermission = (type, action) => permissionStore.hasPermission(type, acti
 const { isPhone } = useResponsiveLayout();
 
 const filters = ref({
-    firstName: null,
-    lastName: null,
-    middleName: null,
+    name: null,
     email: null,
     roleIds: [],
     isBlocked: null,
@@ -469,9 +366,16 @@ const selectedColumns = computed(() =>
 const onToggle = (val) => {
     selectedColumnFields.value = val.map(col => col.field);
 };
-const ordinaryColumns = computed(() => 
+const ordinaryColumns = computed(() =>
     columns.value.filter(c => selectedColumnFields.value.includes(c.field) && !['roleIds','isBlocked'].includes(c.field))
 );
+
+const activeFilterCount = computed(() => [
+    filters.value.name,
+    filters.value.email,
+    filters.value.roleIds?.length ? 'roles' : null,
+    filters.value.isBlocked !== null ? 'status' : null,
+].filter((v) => v !== null && v !== '').length);
 
 const currentPage = ref(1);
 const rowsPerPage = ref(10);
@@ -479,7 +383,7 @@ const {
     isCardMode,
     firstRowIndex,
     currentPageItems: currentPageCustomers,
-    showMobileFilters,
+    showMobileFilters: showFilters,
 } = useMobileTableView({
     items: customers,
     currentPage,
@@ -518,9 +422,7 @@ const hydrateUsersStateFromQuery = () => {
     rowsPerPage.value = parsePositiveNumber(route.query.pageSize, 10);
 
     filters.value = {
-        firstName: normalizeQueryText(route.query.firstName),
-        lastName: normalizeQueryText(route.query.lastName),
-        middleName: normalizeQueryText(route.query.middleName),
+        name: normalizeQueryText(route.query.name),
         email: normalizeQueryText(route.query.email),
         roleIds: parseRoleIdsQuery(route.query.roleIds),
         isBlocked: parseBooleanQuery(route.query.isBlocked),
@@ -533,9 +435,7 @@ const buildUsersQuery = () => {
         pageSize: String(rowsPerPage.value),
     };
 
-    if (filters.value.firstName) nextQuery.firstName = filters.value.firstName;
-    if (filters.value.lastName) nextQuery.lastName = filters.value.lastName;
-    if (filters.value.middleName) nextQuery.middleName = filters.value.middleName;
+    if (filters.value.name) nextQuery.name = filters.value.name;
     if (filters.value.email) nextQuery.email = filters.value.email;
     if (filters.value.roleIds?.length) nextQuery.roleIds = filters.value.roleIds.join(',');
     if (filters.value.isBlocked !== null) nextQuery.isBlocked = String(filters.value.isBlocked);
@@ -626,24 +526,6 @@ const runUsersSync = async ({ endpoint, successDetail, errorDetail, errorLogLabe
     }
 };
 
-const syncPasImAccounts = async () => {
-    await runUsersSync({
-        endpoint: '/api/users/other-accounts/sync-pas-im',
-        successDetail: 'Синхронизация с InfraManager успешно запущена',
-        errorDetail: 'Не удалось запустить синхронизацию с InfraManager',
-        errorLogLabel: 'Ошибка синхронизации с InfraManager: '
-    });
-};
-
-const syncPasOneCzkguAccounts = async () => {
-    await runUsersSync({
-        endpoint: '/api/users/other-accounts/sync-pas-oneczkgu',
-        successDetail: 'Синхронизация с 1СЗКГУ успешно запущена',
-        errorDetail: 'Не удалось запустить синхронизацию с 1СЗКГУ',
-        errorLogLabel: 'Ошибка синхронизации с 1СЗКГУ: '
-    });
-};
-
 // Классы для отображения ролей в зависимости от их типа
 const getRoleTypeClass = (role) => {
     return role.type === 'Custom' ? 'custom-role-type' : 'default-role-type';
@@ -657,12 +539,10 @@ const getCustomerFullName = (customer) => {
     ].filter(Boolean).join(' ') || `Пользователь #${customer.id}`;
 };
 
-const resetMobileFilters = async () => {
+const resetFilters = async () => {
     currentPage.value = 1;
     filters.value = {
-        firstName: null,
-        lastName: null,
-        middleName: null,
+        name: null,
         email: null,
         roleIds: [],
         isBlocked: null,
@@ -753,11 +633,19 @@ h3 {
     gap: 1rem;
 }
 
-.users-mobile-toolbar {
+.users-filters-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.users-filters-head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 .users-mobile-subtitle {
@@ -766,30 +654,69 @@ h3 {
     font-size: 0.92rem;
 }
 
-.users-mobile-toolbar-actions {
+.users-filters-actions {
     display: flex;
     gap: 0.5rem;
     flex-shrink: 0;
-}
-
-.users-mobile-filters {
-    display: grid;
-    gap: 0.75rem;
-    padding: 1rem;
-    border-radius: 18px;
-    border: 1px solid rgba(var(--p-blue-500-rgb), 0.12);
-    background: linear-gradient(
-        180deg,
-        rgba(var(--p-blue-500-rgb), 0.04),
-        rgba(255, 255, 255, 0)
-    );
-}
-
-.users-mobile-filter-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
+}
+
+.users-filter-toggle--active {
+    border-color: var(--p-primary-color);
+    color: var(--p-primary-color);
+}
+
+.users-filters {
+    --users-filters-border: rgba(var(--p-blue-500-rgb), 0.14);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+    align-items: end;
+    padding: 0.85rem;
+    border-radius: 14px;
+    border: 1px dashed var(--users-filters-border);
+    background: rgba(var(--p-blue-500-rgb), 0.03);
+}
+
+/* Анти-overflow: grid-элементы не растягивают контейнер, чипы переносятся */
+.users-filters > * {
+    min-width: 0;
+}
+
+.users-filters :deep(.p-multiselect),
+.users-filters :deep(.p-select),
+.users-filters :deep(.p-inputtext) {
+    width: 100%;
+}
+
+.users-filters :deep(.p-multiselect-label) {
+    white-space: normal;
+    flex-wrap: wrap;
+}
+
+.users-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.users-filter-field label {
+    font-size: 0.78rem;
+    color: var(--p-grey-1);
+}
+
+.users-filter-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.users-filter-actions :deep(.p-select) {
+    flex: 1 1 auto;
 }
 
 .users-mobile-summary {
@@ -901,14 +828,6 @@ h3 {
     padding-bottom: var(--app-mobile-bottom-offset);
 }
 
-.users-table-header {
-    gap: 0.75rem;
-}
-
-.users-table-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
 .special-users-panel {
     display: flex;
     flex-direction: column;
@@ -1042,29 +961,35 @@ h3 {
     }
 }
 
+@media (max-width: 1100px) {
+    .users-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 @media (max-width: 768px) {
     .content-wrapper {
         padding-bottom: 1rem;
     }
 
-    .users-mobile-toolbar,
+    .users-filters-head,
     .users-card-header,
     .users-mobile-summary {
         flex-direction: column;
         align-items: flex-start;
     }
 
-    .users-mobile-toolbar-actions {
+    .users-filters-actions {
         width: 100%;
         flex-wrap: wrap;
     }
 
-    .users-mobile-toolbar-actions :deep(.p-button),
-    .users-mobile-toolbar-actions :deep(.create-button) {
+    .users-filters-actions :deep(.p-button),
+    .users-filters-actions :deep(.create-button) {
         flex: 1 1 calc(50% - 0.25rem);
     }
 
-    .users-mobile-filter-actions {
+    .users-filters {
         grid-template-columns: 1fr;
     }
 }

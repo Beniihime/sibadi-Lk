@@ -11,7 +11,7 @@
                 <span>Учебный год</span>
                 <small>Выберите период</small>
             </div>
-            <div class="year-options">
+            <div class="year-options" ref="yearOptionsRef">
                 <button
                     v-for="year in years"
                     :key="year"
@@ -118,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from "vue";
+import { ref, onMounted, watch, computed, nextTick } from "vue";
 import axios from "axios";
 import { useRouter } from 'vue-router';
 import { useGroupsStore } from '@/stores/groups';
@@ -144,6 +144,17 @@ const router = useRouter();
 
 const currentPage = ref(0);
 const rowsPerPage = ref(10); // Количество карточек на странице (по умолчанию)
+const yearOptionsRef = ref(null);
+
+// Прокрутка ленты учебных годов к выбранному году (акцент на текущем)
+const scrollSelectedYearIntoView = () => {
+    nextTick(() => {
+        const container = yearOptionsRef.value;
+        if (!container) return;
+        const active = container.querySelector('button.active');
+        if (active) active.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    });
+};
 
 const groupsStore = useGroupsStore();
 
@@ -301,6 +312,7 @@ const selectCategory = (category) => {
 
 const selectYear = (year) => {
     selectedYear.value = year;
+    scrollSelectedYearIntoView();
 };
 
 // Следим за изменением года и загружаем данные
@@ -315,6 +327,11 @@ watch(selectedYear, () => {
 watch(selectedCategory, (newCategory) => {
     saveSelectedScheduleCategory(newCategory);
 })
+
+// При появлении списка годов прокручиваем ленту к выбранному (текущему) году
+watch(years, () => {
+    if (years.value.length) scrollSelectedYearIntoView();
+});
 
 onMounted(() => {
     const savedCategory = getSavedScheduleCategory();
@@ -691,6 +708,23 @@ onMounted(() => {
     .schedule-container { padding: 0.85rem var(--app-page-padding-x) calc(1rem + var(--app-mobile-bottom-offset)); }
     .schedule-hero { padding-top: 0.1rem; }
     .year-selection { align-items: flex-start; flex-direction: column; }
+    .year-options {
+        width: 100%;
+        flex-wrap: nowrap;
+        padding-bottom: 0.25rem;
+        scroll-snap-type: x proximity;
+    }
+    .year-options button {
+        flex: 0 0 auto;
+        min-width: 5.6rem;
+        padding: 0.55rem 0.7rem;
+        scroll-snap-align: center;
+    }
+    .year-options button.active {
+        border-color: var(--p-primary-color);
+        background: var(--p-primary-color);
+        color: #fff;
+    }
     .category-selection { padding: 0.85rem; }
     .category-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .category-options button:last-child { grid-column: 1 / -1; }

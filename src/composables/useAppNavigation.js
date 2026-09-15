@@ -50,6 +50,7 @@ const QUICK_ACTION_ITEMS = [
 export const useAppNavigation = () => {
     const permissionStore = usePermissionStore();
     const showRequests = ref(false);
+    const hasUmuAccount = ref(false);
 
     const hasPermission = (type, action) => permissionStore.hasPermission(type, action);
     const canAccessStudentTickets = () => (
@@ -138,6 +139,7 @@ export const useAppNavigation = () => {
         try {
             const requestAccess = await getRequestAccess();
             showRequests.value = requestAccess.showRequests;
+            hasUmuAccount.value = Boolean(requestAccess.hasUmuAccount);
         } catch (error) {
             console.debug('Не удалось определить доступность раздела заявок:', error);
         }
@@ -154,6 +156,7 @@ export const useAppNavigation = () => {
         umuSiriusItems,
         projectOfficeItems,
         quickActions,
+        hasUmuAccount,
         showTicketsMenu: computed(() => ticketsItems.value.length > 0),
         showIdoMenu: computed(() => true),
         showUmuSiriusMenu: computed(() => umuSiriusItems.value.length > 0),

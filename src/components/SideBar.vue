@@ -1,7 +1,6 @@
 <template>
-    <ConfirmDialog></ConfirmDialog>
-    <div 
-        class="sidebar-container" 
+    <div
+        class="sidebar-container"
         :class="[
             ['season-' + currentSeason, 'bg-image-' + currentSeason],
             { 'sidebar-mobile': isMobileMode },
@@ -241,6 +240,7 @@
     <ServicesCatalogModal
         :visible="servicesModalVisible"
         :items="servicesCatalogItems"
+        :platform-items="platformsCatalogItems"
         :admin-items="adminCatalogItems"
         @update:visible="onServicesModalVisibilityChange"
     />
@@ -289,7 +289,7 @@ const props = defineProps({
     }
 });
 
-const emit = defineEmits(['overlay-open', 'overlay-close', 'request-expand']);
+const emit = defineEmits(['overlay-open', 'overlay-close', 'request-expand', 'notifications-panel-open', 'notifications-panel-close']);
 
 const confirm = useConfirm();
 const toast = useToast();
@@ -342,6 +342,7 @@ const {
     showIdoMenu,
     showUmuSiriusMenu,
     showProjectOfficeMenu,
+    hasUmuAccount,
 } = useAppNavigation();
 
 // Вычисляемые свойства для сезона
@@ -365,7 +366,7 @@ const directMenuItems = computed(() => [
 ]);
 const servicesCatalogItems = computed(() => {
     const items = serviceItems.value
-        .filter((item) => !['schedule', 'faq'].includes(item.id));
+        .filter((item) => !['schedule', 'faq', 'umu-sirius', 'project-office'].includes(item.id));
 
     if (showTicketsMenu.value) {
         items.push({ id: 'tickets', name: 'Справки', icon: 'pi pi-ticket', children: visibleTicketsMenuItems.value });
@@ -375,18 +376,60 @@ const servicesCatalogItems = computed(() => {
         items.push({ id: 'ido', name: 'ИДО', icon: 'pi pi-building-columns', children: visibleIdoMenuItems.value });
     }
 
+    const portfolioChildren = [
+        { id: 'electronic-record-book', name: 'Электронная зачётка', icon: 'pi pi-id-card', path: '/electronic-record-book', description: 'Успеваемость, оценки и академические результаты.' },
+        { id: 'my-curriculum', name: 'Мой учебный план', icon: 'pi pi-list-check', path: '/my-curriculum', description: 'Дисциплины, модули и график обучения по программе.' },
+    ].filter((child) => child.id !== 'electronic-record-book' || hasUmuAccount.value);
+
+    if (portfolioChildren.length > 0) {
+        items.push({
+            id: 'portfolio',
+            name: 'Портфолио',
+            icon: 'pi pi-briefcase',
+            description: 'Электронная зачетка, достижения и сертификаты в одном месте.',
+            children: portfolioChildren,
+        });
+    }
+
+    items.push({
+        id: 'surveys',
+        name: 'Опросы',
+        icon: 'pi pi-clipboard',
+        badge: 'Скоро',
+        disabled: true,
+        description: 'Опросы и анкетирование сотрудников и студентов.',
+    });
+
+    items.push({
+        id: 'news',
+        name: 'Новости',
+        icon: 'pi pi-megaphone',
+        path: '/news',
+        description: 'Новостная лента, теги, реакции и закладки.',
+    });
+
+    return items;
+});
+
+const platformsCatalogItems = computed(() => {
+    const items = [];
+
+    items.push({ id: 'portal', name: 'Портал', badge: 'Платформа', icon: 'pi pi-globe', description: 'Учебный портал СибАДИ', path: 'https://portal.sibadi.org' });
+
     if (showUmuSiriusMenu.value) {
-        items.push({ id: 'umu-sirius', name: 'УМУ', icon: 'pi pi-briefcase', children: visibleUmuSiriusMenuItems.value });
+        items.push({ id: 'umu-sirius', name: 'СибАДИ - Управление', icon: 'pi pi-briefcase', children: visibleUmuSiriusMenuItems.value, badge: 'Скоро' });
     }
 
     if (showProjectOfficeMenu.value) {
-        items.push({ id: 'project-office', name: 'Проектный офис', icon: 'pi pi-paperclip', children: visibleProjectOfficeMenuItems.value });
+        items.push({ id: 'project-office', name: 'Проектный офис', icon: 'pi pi-paperclip', children: visibleProjectOfficeMenuItems.value, badge: 'Скоро', disabled: true });
     }
 
     return items;
 });
+
 const showServicesMenu = computed(() => (
     servicesCatalogItems.value.length > 0
+    || platformsCatalogItems.value.length > 0
     || adminItems.value.length > 0
     || hasPermission('InfraManager', 'Read')
 ));
@@ -498,12 +541,14 @@ const toggleNotificationsPopover = (event) => {
 
 const handleNotificationsPopoverShow = async () => {
     notificationsPopoverVisible.value = true;
+    emit('notifications-panel-open');
     await nextTick();
     positionNotificationsPopover();
 };
 
 const handleNotificationsPopoverHide = () => {
     notificationsPopoverVisible.value = false;
+    emit('notifications-panel-close');
 };
 
 const handleNotificationNavigate = () => {

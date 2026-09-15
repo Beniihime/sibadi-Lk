@@ -554,4 +554,52 @@ h4 {
         opacity: 0;
     }
 }
+
+@media (max-width: 768px) {
+    .schedule-details-container {
+        padding: 1rem var(--app-page-padding-x) calc(1rem + var(--app-mobile-bottom-offset));
+    }
+    .schedule-header {
+        gap: 0.85rem;
+        margin-bottom: 1.25rem;
+    }
+    .header-row {
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+    .header-card {
+        flex: 1 1 calc(50% - 0.3rem);
+        min-width: 0;
+        padding: 0.65rem;
+    }
+    .refresh-time {
+        font-size: 0.8rem;
+    }
+    .day-container {
+        padding: 0.65rem 0.85rem;
+    }
+    .lesson-card {
+        padding: 0.85rem 0;
+    }
+    .lesson-content {
+        margin-left: 0.5rem;
+        padding-right: 0.85rem;
+    }
+    .lesson-title {
+        font-size: 1.1rem;
+    }
+    .lesson-type {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-card {
+        flex: 1 1 100%;
+    }
+    .lesson-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+}
 </style>

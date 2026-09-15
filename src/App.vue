@@ -2,6 +2,7 @@
   <div class="app-root">
     <div class="app-shell">
       <Toast />
+      <ConfirmDialog :pt="{ mask: { class: 'confirm-dialog-top' } }" />
       <router-view />
     </div>
     <div v-if="splashState.active" class="global-splash-overlay">
@@ -13,6 +14,7 @@
 <script setup>
 import { onMounted } from 'vue';
 import Toast from 'primevue/toast';
+import ConfirmDialog from 'primevue/confirmdialog';
 import { useRoute } from 'vue-router';
 import SplashScreen from '@/components/Utils/SplashScreen.vue';
 import {
@@ -67,5 +69,14 @@ const onSplashFinished = () => {
 .global-splash-logo {
   width: 100%;
   height: 100%;
+}
+</style>
+
+<style>
+/* Гарантируем, что диалог подтверждения всегда выше остальных оверлеев
+   (например, модалки сервисов на мобильном). !important перекрывает инлайн-z-index,
+   который выставляет PrimeVue через ZIndex.set. */
+.confirm-dialog-top {
+  z-index: 10000 !important;
 }
 </style>

@@ -275,6 +275,25 @@ const routes = [
                     title: 'Расписание'
                 }
             },
+            // Electronic record book (Портфолио)
+            {
+                path: "/electronic-record-book",
+                component: () => import('@/views/ElectronicRecordBookPage.vue'),
+                name: 'ElectronicRecordBook',
+                meta: {
+                    requiresAuth: true,
+                    title: 'Электронная зачётка'
+                }
+            },
+            {
+                path: "/my-curriculum",
+                component: () => import('@/views/MyCurriculumPage.vue'),
+                name: 'MyCurriculum',
+                meta: {
+                    requiresAuth: true,
+                    title: 'Учебный план'
+                }
+            },
             {
                 path: "/faq",
                 component: () => import('@/views/FaqPage.vue'),
@@ -297,6 +316,15 @@ const routes = [
                 name: 'FaqArticle',
                 meta: {
                     title: 'Статья'
+                }
+            },
+            {
+                path: "/news",
+                component: () => import('@/views/news/NewsPage.vue'),
+                name: 'News',
+                meta: {
+                    requiresAuth: true,
+                    title: 'Новости'
                 }
             },
             {
@@ -409,7 +437,7 @@ router.beforeEach(async (to, from) => {
         title = 'Загрузка...';
     }
 
-    document.title = `${title} - LCS`;
+    document.title = `${title} - ЛКС`;
 
     const permissionStore = usePermissionStore();
     const requiresAuthRoute = to.matched.some(record => record.meta.requiresAuth);

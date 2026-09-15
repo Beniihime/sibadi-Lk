@@ -79,94 +79,131 @@
                 </div>
             </div>
 
-            <div class="panel-card">
-                <div class="panel-header">
-                    <h3>Последние заявки</h3>
-                    <router-link
-                        v-if="showRequests"
-                        class="panel-header-action"
-                        :to="{ path: '/requests', query: { create: '1' } }"
-                        aria-label="Создать заявку"
-                        v-tooltip.top="'Создать заявку'"
-                    >
-                        <i class="pi pi-plus"></i>
-                    </router-link>
+            <div class="overview-column">
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <h3>Последние заявки</h3>
+                        <div class="panel-header-actions">
+                            <router-link
+                                v-if="showRequests"
+                                class="panel-header-action panel-header-action-primary"
+                                :to="{ path: '/requests', query: { create: '1' } }"
+                                aria-label="Создать заявку"
+                                v-tooltip.top="'Создать заявку'"
+                            >
+                                <i class="pi pi-plus"></i>
+                            </router-link>
+                            <router-link class="panel-header-action" to="/requests" aria-label="Открыть заявки" v-tooltip.top="'Открыть заявки'">
+                                <i class="pi pi-arrow-up-right"></i>
+                            </router-link>
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <div v-if="recentTicketsLoading" class="schedule-skeleton">
+                            <Skeleton v-for="item in 3" :key="`ticket-skeleton-${item}`" width="100%" height="2.7rem" borderRadius="10px" />
+                        </div>
+                        <div v-else-if="recentTickets.length" class="recent-tickets">
+                            <router-link
+                                v-for="ticket in recentTickets"
+                                :key="ticket.id"
+                                class="recent-ticket"
+                                :to="{ path: '/requests', query: { callId: ticket.id } }"
+                            >
+                                <div class="recent-ticket-main">
+                                    <strong>{{ ticket.callSummaryName || ticket.fullName || `Заявка №${ticket.number}` }}</strong>
+                                    <span>{{ formatTicketDate(ticket.utcDateRegistered || ticket.utcDateModified) }}</span>
+                                </div>
+                                <Tag :value="ticket.entityStateName || 'Не указан'" :severity="getTicketStatusSeverity(ticket.entityStateName)" />
+                            </router-link>
+                        </div>
+                        <AsyncState
+                            v-else-if="recentTicketsError"
+                            tone="error"
+                            icon="pi pi-exclamation-triangle"
+                            title="Не удалось загрузить заявки"
+                            description="Проверьте соединение и попробуйте ещё раз."
+                            retry
+                            @retry="fetchRecentTickets"
+                        />
+                        <div v-else class="activity-item muted">
+                            {{ showRequests ? 'Незакрытых заявок нет' : 'Заявки недоступны' }}
+                        </div>
+                    </div>
                 </div>
-                <div class="panel-content">
-                    <div v-if="recentTicketsLoading" class="schedule-skeleton">
-                        <Skeleton v-for="item in 3" :key="`ticket-skeleton-${item}`" width="100%" height="2.7rem" borderRadius="10px" />
+
+                <div v-if="showTicketsShortcut" class="panel-card tickets-overview-card">
+                    <div class="panel-header">
+                        <h3>Справки</h3>
+                        <div class="panel-header-actions">
+                            <button
+                                v-if="canCreateStudentTickets"
+                                class="panel-header-action panel-header-action-primary"
+                                aria-label="Создать справку"
+                                v-tooltip.top="'Создать справку'"
+                                @click="openCertificateModal"
+                            >
+                                <i class="pi pi-plus"></i>
+                            </button>
+                            <router-link class="panel-header-action" :to="ticketsDashboardLink" aria-label="Открыть справки" v-tooltip.top="'Открыть справки'">
+                                <i class="pi pi-arrow-up-right"></i>
+                            </router-link>
+                        </div>
                     </div>
-                    <div v-else-if="recentTickets.length" class="recent-tickets">
-                        <router-link
-                            v-for="ticket in recentTickets"
-                            :key="ticket.id"
-                            class="recent-ticket"
-                            to="/requests"
-                        >
-                            <div class="recent-ticket-main">
-                                <strong>{{ ticket.callSummaryName || ticket.fullName || `Заявка №${ticket.number}` }}</strong>
-                                <span>{{ formatTicketDate(ticket.utcDateRegistered || ticket.utcDateModified) }}</span>
-                            </div>
-                            <Tag :value="ticket.entityStateName || 'Не указан'" :severity="getTicketStatusSeverity(ticket.entityStateName)" />
-                        </router-link>
-                    </div>
-                    <AsyncState
-                        v-else-if="recentTicketsError"
-                        tone="error"
-                        icon="pi pi-exclamation-triangle"
-                        title="Не удалось загрузить заявки"
-                        description="Проверьте соединение и попробуйте ещё раз."
-                        retry
-                        @retry="fetchRecentTickets"
-                    />
-                    <div v-else class="activity-item muted">
-                        {{ showRequests ? 'Незакрытых заявок нет' : 'Заявки недоступны' }}
+                    <div class="panel-content">
+                        <div v-if="recentCertificatesLoading" class="schedule-skeleton">
+                            <Skeleton v-for="item in 3" :key="`certificate-skeleton-${item}`" width="100%" height="2.7rem" borderRadius="10px" />
+                        </div>
+                        <div v-else-if="recentCertificates.length" class="recent-tickets">
+                            <router-link
+                                v-for="ticket in recentCertificates"
+                                :key="ticket.id"
+                                class="recent-ticket"
+                                to="/tickets/my-requests"
+                            >
+                                <div class="recent-ticket-main">
+                                    <strong>{{ ticket.requestType?.title || ticket.requestType?.name || `Справка №${ticket.number}` }}</strong>
+                                    <span>{{ formatCertificateDate(ticket.createdAt || ticket.updatedAt) }}</span>
+                                </div>
+                                <Tag :value="getCertificateStatusLabel(ticket.status)" :severity="getCertificateStatusSeverity(ticket.status)" />
+                            </router-link>
+                        </div>
+                        <div v-else class="activity-item muted">Оформляйте справки и отслеживайте их готовность здесь.</div>
                     </div>
                 </div>
             </div>
 
-            <div v-if="showTicketsShortcut" class="panel-card tickets-overview-card">
+            <div class="panel-card news-overview-card">
                 <div class="panel-header">
-                    <h3>Справки</h3>
-                    <div class="panel-header-actions">
-                        <router-link
-                            v-if="canCreateStudentTickets"
-                            class="panel-header-action panel-header-action-primary"
-                            to="/tickets/my-requests"
-                            aria-label="Создать справку"
-                            v-tooltip.top="'Создать справку'"
-                        >
-                            <i class="pi pi-plus"></i>
-                        </router-link>
-                        <router-link class="panel-header-action" :to="ticketsDashboardLink" aria-label="Открыть справки" v-tooltip.top="'Открыть справки'">
-                            <i class="pi pi-arrow-up-right"></i>
-                        </router-link>
-                    </div>
+                    <h3>Новости</h3>
+                    <router-link class="panel-header-action" to="/news" aria-label="Открыть новости" v-tooltip.top="'Открыть новости'">
+                        <i class="pi pi-arrow-up-right"></i>
+                    </router-link>
                 </div>
                 <div class="panel-content">
-                    <div v-if="recentCertificatesLoading" class="schedule-skeleton">
-                        <Skeleton v-for="item in 3" :key="`certificate-skeleton-${item}`" width="100%" height="2.7rem" borderRadius="10px" />
+                    <div v-if="latestNewsLoading" class="schedule-skeleton">
+                        <Skeleton width="70%" height="1.1rem" borderRadius="8px" />
+                        <Skeleton width="100%" height="2.7rem" borderRadius="10px" />
+                        <Skeleton width="40%" height="0.9rem" borderRadius="8px" />
                     </div>
-                    <div v-else-if="recentCertificates.length" class="recent-tickets">
-                        <router-link
-                            v-for="ticket in recentCertificates"
-                            :key="ticket.id"
-                            class="recent-ticket"
-                            to="/tickets/my-requests"
-                        >
-                            <div class="recent-ticket-main">
-                                <strong>{{ ticket.requestType?.title || ticket.requestType?.name || `Справка №${ticket.number}` }}</strong>
-                                <span>{{ formatCertificateDate(ticket.createdAt || ticket.updatedAt) }}</span>
-                            </div>
-                            <Tag :value="getCertificateStatusLabel(ticket.status)" :severity="getCertificateStatusSeverity(ticket.status)" />
+                    <div v-else-if="latestNews" class="latest-news">
+                        <strong class="latest-news-title">{{ latestNews.title || 'Без заголовка' }}</strong>
+                        <p v-if="latestNews.body" class="latest-news-body">{{ latestNews.body }}</p>
+                        <span v-if="latestNews.createdAt" class="latest-news-date">{{ formatLatestNewsDate(latestNews.createdAt) }}</span>
+                        <router-link to="/news" class="latest-news-link">
+                            <span>Все новости</span>
+                            <i class="pi pi-arrow-right"></i>
                         </router-link>
                     </div>
-                    <div v-else class="activity-item muted">Оформляйте справки и отслеживайте их готовность здесь.</div>
+                    <div v-else class="activity-item muted">Новостей пока нет</div>
                 </div>
             </div>
         </section>
 
-        <NewsFeedSection />
+        <StudentTicketCreateDialog
+            ref="createCertificateDialogRef"
+            :show-button="false"
+            @created="onCertificateCreated"
+        />
     </main>
 </template>
 
@@ -174,14 +211,15 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import axiosInstance from '@/utils/axios.js';
-import NewsFeedSection from '@/components/News/NewsFeedSection.vue';
 import AsyncState from '@/components/Utils/AsyncState.vue';
+import StudentTicketCreateDialog from '@/components/Tickets/StudentTicketCreateDialog.vue';
 import { usePermissionStore } from '@/stores/permissions.js';
 import { getRequestAccess } from '@/utils/requestAccess.js';
 import { getCurrentUser } from '@/utils/currentUser.js';
-import { formatDateOmskFromUtcString } from '@/utils/date.js';
+import { formatDateOmskFromUtcString, formatDateRuLongWithTime } from '@/utils/date.js';
 import { getInfraStatusSeverity } from '@/utils/infraStatus.js';
 import { listMyTickets } from '@/api/tickets.js';
+import { getVisiblePosts, normalizePostsResponse } from '@/api/news.js';
 import { requestMocks, ticketMocks, USE_MOCK_DATA } from '@/config/mockRuntime.js';
 import {
     buildSchedulePath,
@@ -208,6 +246,8 @@ const recentTicketsLoading = ref(false);
 const recentTicketsError = ref(false);
 const recentCertificates = ref([]);
 const recentCertificatesLoading = ref(false);
+const latestNews = ref(null);
+const latestNewsLoading = ref(false);
 let scheduleRequestId = 0;
 
 const scheduleModeOptions = [
@@ -241,13 +281,21 @@ const canAccessStudentTickets = computed(() => (
 ));
 const canCreateStudentTickets = computed(() => permissionStore.hasPermission('TicketsStudent', 'Create'));
 const showTicketsShortcut = computed(() => canReadTickets.value || canAccessStudentTickets.value);
-const ticketsDashboardLink = computed(() => (
-    canReadTickets.value ? '/tickets' : '/tickets/my-requests'
-));
+const ticketsDashboardLink = computed(() => '/tickets/my-requests');
+const createCertificateDialogRef = ref(null);
+
+const openCertificateModal = () => {
+    createCertificateDialogRef.value?.openModal?.();
+};
+
+const onCertificateCreated = () => {
+    fetchRecentCertificates();
+};
 
 const getTicketStatusSeverity = getInfraStatusSeverity;
 const formatTicketDate = (date) => formatDateOmskFromUtcString(date);
-const formatCertificateDate = (date) => formatDateOmskFromUtcString(date);
+const formatCertificateDate = (date) => formatDateRuLongWithTime(date);
+const formatLatestNewsDate = (date) => formatDateRuLongWithTime(date);
 const getCertificateStatusSeverity = (status) => ({
     New: 'info',
     Open: 'warning',
@@ -320,6 +368,20 @@ const fetchRecentCertificates = async () => {
         recentCertificates.value = [];
     } finally {
         recentCertificatesLoading.value = false;
+    }
+};
+
+const fetchLatestNews = async () => {
+    latestNewsLoading.value = true;
+    try {
+        const response = await getVisiblePosts({ page: 1, pageSize: 1 });
+        const { posts } = normalizePostsResponse(response.data);
+        latestNews.value = posts[0] || null;
+    } catch (error) {
+        console.debug('Ошибка при загрузке последней новости:', error);
+        latestNews.value = null;
+    } finally {
+        latestNewsLoading.value = false;
     }
 };
 
@@ -503,6 +565,7 @@ onMounted(() => {
     fetchRequestAvailability();
     scheduleSelection.value = getScheduleSelectionByType(selectedScheduleType.value);
     fetchNearestSchedule();
+    fetchLatestNews();
 });
 </script>
 
@@ -645,6 +708,7 @@ h3 {
 .overview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: start;
     gap: 16px;
 }
 .panel-card {
@@ -668,7 +732,15 @@ h3 {
     border-color: rgba(var(--p-primary-500-rgb), 0.28);
 }
 .overview-grid .panel-card:nth-child(1) { animation-delay: 0.38s; }
-.overview-grid .panel-card:nth-child(2) { animation-delay: 0.46s; }
+.overview-grid .panel-card:nth-child(3) { animation-delay: 0.54s; }
+.overview-column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+.overview-column > .panel-card:nth-child(1) { animation-delay: 0.46s; }
+.overview-column > .panel-card:nth-child(2) { animation-delay: 0.54s; }
 .panel-header {
     display: flex;
     justify-content: space-between;
@@ -700,6 +772,8 @@ h3 {
     background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
     color: var(--p-primary-color);
     text-decoration: none;
+    cursor: pointer;
+    font: inherit;
     transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 .panel-header-action:hover {
@@ -798,6 +872,60 @@ h3 {
 .recent-ticket-main span {
     color: var(--p-grey-2);
     font-size: 0.78rem;
+}
+.latest-news {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.latest-news-title {
+    font-size: 1rem;
+    line-height: 1.3;
+    color: var(--p-text-color);
+}
+.latest-news-body {
+    margin: 0;
+    color: var(--p-text-muted-color, var(--p-grey-2));
+    font-size: 0.88rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: pre-line;
+}
+.latest-news-date {
+    color: var(--p-grey-2);
+    font-size: 0.78rem;
+}
+.latest-news-link {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 0.72rem;
+    border: 1px solid color-mix(in srgb, var(--p-primary-color) 18%, transparent);
+    background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+    color: var(--p-primary-color);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.latest-news-link:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--p-primary-color) 36%, transparent);
+    background: color-mix(in srgb, var(--p-primary-color) 16%, transparent);
+}
+.latest-news-link .pi {
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+}
+.latest-news-link:hover .pi {
+    transform: translateX(3px);
 }
 .schedule-mini {
     display: flex;

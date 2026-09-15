@@ -178,9 +178,9 @@ const loadGroups = async () => {
     } catch (error) {
         console.error('Ошибка при загрузке групп с ответственными: ', error);
         window.dispatchEvent(new CustomEvent('toast', {
-            detail: { 
-                severity: 'error', 
-                summary: 'Группы', 
+            detail: {
+                severity: 'error',
+                summary: 'Группы',
                 detail: `Ошибка при загрузке данных`,
             }
         }));

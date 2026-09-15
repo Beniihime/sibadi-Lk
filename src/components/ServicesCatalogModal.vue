@@ -3,6 +3,7 @@
         :visible="visible"
         header="Сервисы"
         modal
+        :dismissableMask="true"
         :style="{ width: 'min(96vw, 1360px)' }"
         class="services-catalog-modal"
         @update:visible="emit('update:visible', $event)"
@@ -52,6 +53,24 @@
                     </div>
                 </section>
 
+                <section v-if="platformItems.length" class="services-group">
+                    <div class="modal-section-heading">
+                        <div>
+                            <span class="services-group-kicker">Внешние платформы</span>
+                            <h3>Платформы</h3>
+                        </div>
+                    </div>
+                    <div class="services-grid">
+                        <CatalogServiceCard
+                            v-for="(item, index) in platformItems"
+                            :key="item.id || item.path"
+                            :item="withDescription(item)"
+                            :index="index + items.length"
+                            @select="openItem"
+                        />
+                    </div>
+                </section>
+
                 <section v-if="adminItems.length" class="services-group">
                     <div class="modal-section-heading">
                         <div>
@@ -64,7 +83,7 @@
                             v-for="(item, index) in adminItems"
                             :key="item.id || item.path"
                             :item="withDescription(item)"
-                            :index="index + 2"
+                            :index="index + items.length + platformItems.length"
                             @select="openItem"
                         />
                     </div>
@@ -82,7 +101,7 @@
                             v-for="(item, index) in microserviceItems"
                             :key="item.id"
                             :item="item"
-                            :index="index"
+                            :index="index + items.length + platformItems.length + adminItems.length"
                             @select="openItem"
                         />
                     </div>
@@ -97,6 +116,17 @@
                     </div>
                     <AccentColorEditor class="catalog-theme-editor" />
                 </section>
+
+                <section class="services-group services-group--logout">
+                    <Button
+                        label="Выйти из аккаунта"
+                        icon="pi pi-sign-out"
+                        severity="danger"
+                        outlined
+                        class="catalog-logout-button"
+                        @click="confirmLogout"
+                    />
+                </section>
             </template>
         </div>
     </Dialog>
@@ -106,6 +136,15 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePermissionStore } from '@/stores/permissions.js';
+import { useNotificationStore } from '@/stores/notifications.js';
+import { disconnectNotificationsHub } from '@/utils/notificationHub.js';
+import { useConfirm } from 'primevue/useconfirm';
+import { useToast } from 'primevue/usetoast';
+import { clearAuthData } from '@/utils/TokenService.js';
+import { resetRequestAccessCache } from '@/utils/requestAccess.js';
+import { resetCurrentUserCache } from '@/utils/currentUser.js';
+import { runLogoutClipTransition } from '@/composables/logoutTransition';
+import axiosInstance from '@/utils/axios.js';
 import CatalogServiceCard from '@/components/CatalogServiceCard.vue';
 import { canAccessNewsManagement } from '@/api/news.js';
 import AccentColorEditor from '@/components/Utils/AccentColorEditor.vue';
@@ -114,33 +153,37 @@ const props = defineProps({
     visible: Boolean,
     items: { type: Array, default: () => [] },
     adminItems: { type: Array, default: () => [] },
+    platformItems: { type: Array, default: () => [] },
     showThemeEditor: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:visible']);
 const router = useRouter();
 const permissionStore = usePermissionStore();
+const confirm = useConfirm();
+const toast = useToast();
+const notificationStore = useNotificationStore();
 const activeParent = ref(null);
 const canManageNews = computed(() => canAccessNewsManagement(permissionStore));
 const canAccessInfraSuite = computed(() => permissionStore.hasPermission('InfraManager', 'Read'));
-const canReadUmuSirius = computed(() => props.items.some((item) => item.id === 'umu-sirius'));
+const canReadUmuSirius = computed(() => props.platformItems.some((item) => item.id === 'umu-sirius'));
 const microserviceItems = computed(() => {
     const items = [];
 
     if (canAccessInfraSuite.value) {
         items.push(
-            { id: 'infra-manager', name: 'ИТ-заявки', badge: 'Заявки', description: 'Заявки, связи пользователей и управление ИТ-процессами.', path: '/services/infraManager', icon: 'pi pi-ticket', theme: 0 },
-            { id: 'rating', name: 'Рейтинг', badge: 'Рейтинг', description: 'Сезоны, показатели и расчет рейтингов сотрудников.', path: '/services/rating', icon: 'pi pi-star', theme: 1 },
-            { id: 'analytics', name: 'Аналитика студентов', badge: 'Прогноз', description: 'Академические риски, активность и рекомендации кураторам.', path: '/services/ml-analytics', icon: 'pi pi-chart-line', theme: 2 },
+            { id: 'infra-manager', name: 'ИТ-заявки', badge: 'Заявки', description: 'Заявки, связи пользователей и управление ИТ-процессами.', path: '/services/infraManager', icon: 'pi pi-ticket' },
+            { id: 'rating', name: 'Рейтинг', badge: 'Рейтинг', description: 'Сезоны, показатели и расчет рейтингов сотрудников.', path: '/services/rating', icon: 'pi pi-star' },
+            { id: 'analytics', name: 'Аналитика студентов', badge: 'Прогноз', description: 'Академические риски, активность и рекомендации кураторам.', path: '/services/ml-analytics', icon: 'pi pi-chart-line' },
         );
     }
 
     if (canReadUmuSirius.value) {
-        items.push({ id: 'umu', name: 'УМУ · ГПХ', badge: 'Документы', description: 'Исполнители, договоры, решения и шаблоны для ГПХ.', path: '/umu-sirius', icon: 'pi pi-briefcase', theme: 3 });
+        items.push({ id: 'umu', name: 'УМУ · ГПХ', badge: 'Документы', description: 'Исполнители, договоры, решения и шаблоны для ГПХ.', path: '/umu-sirius', icon: 'pi pi-briefcase' });
     }
 
     if (canManageNews.value) {
-        items.push({ id: 'news', name: 'Новости', badge: 'Контент', description: 'Публикации, редактура и управление новостной лентой.', path: '/news/manage', icon: 'pi pi-megaphone', theme: 4 });
+        items.push({ id: 'news', name: 'Новости', badge: 'Настройки', description: 'Публикации, редактура и управление новостной лентой.', path: '/news/manage', icon: 'pi pi-megaphone' });
     }
 
     return items;
@@ -169,18 +212,77 @@ const getDescription = (item) => item.description || descriptions[item.id] || de
 const withDescription = (item) => ({ ...item, description: getDescription(item) });
 const getItemsLabel = (count) => (count === 1 ? 'пункт' : count < 5 ? 'пункта' : 'пунктов');
 
+const confirmLogout = () => {
+    confirm.require({
+        message: 'Вы действительно хотите выйти?',
+        header: 'Выход из аккаунта',
+        icon: 'pi pi-info-circle',
+        rejectLabel: 'Отмена',
+        rejectProps: {
+            label: 'Cancel',
+            severity: 'secondary',
+            outlined: true,
+        },
+        acceptProps: {
+            label: 'Выйти',
+            severity: 'danger',
+        },
+        accept: () => {
+            logout();
+        },
+        reject: () => {
+            toast.add({ severity: 'info', summary: 'Отклонено', detail: 'Вы отклонили выход', life: 3000 });
+        },
+    });
+};
+
+const logout = async () => {
+    let ssoLogoutUrl = null;
+
+    try {
+        const response = await axiosInstance.post('/api/auth/sso/logout/redirection');
+        ssoLogoutUrl = response.data || null;
+    } catch (error) {
+        console.error('Не удалось получить URL для выхода из SSO:', error);
+    }
+
+    await disconnectNotificationsHub();
+    notificationStore.reset();
+    clearAuthData();
+    await permissionStore.clearPermissions();
+    await permissionStore.$reset();
+    resetRequestAccessCache();
+    resetCurrentUserCache();
+
+    sessionStorage.setItem('loggedOut', '1');
+
+    if (ssoLogoutUrl) {
+        await runLogoutClipTransition(() => {
+            window.location.href = ssoLogoutUrl;
+            return new Promise(() => {});
+        });
+    } else {
+        await runLogoutClipTransition(() => router.push('/auth'));
+    }
+};
+
 const closeModal = () => {
     activeParent.value = null;
     emit('update:visible', false);
 };
 
 const openItem = (item) => {
+    if (item.disabled || item.id === 'project-office' || item.id === 'umu-sirius') return;
     if (item.children?.length) {
         activeParent.value = item;
         return;
     }
     if (!item.path) return;
     closeModal();
+    if (/^https?:\/\//i.test(item.path)) {
+        window.open(item.path, '_blank', 'noopener');
+        return;
+    }
     router.push(item.path);
 };
 </script>
@@ -189,7 +291,7 @@ const openItem = (item) => {
 .services-catalog-modal.p-dialog { max-height: min(88vh, 860px); }
 .services-catalog-modal .p-dialog-header { padding: 1.3rem 1.35rem 0.75rem; font-size: clamp(1.35rem, 2vw, 1.65rem); font-weight: 850; letter-spacing: -0.035em; }
 .services-catalog-modal .p-dialog-content { padding: 0.8rem 1.35rem 1.35rem; scrollbar-color: color-mix(in srgb, var(--p-primary-color) 55%, transparent) transparent; scrollbar-width: thin; }
-.services-catalog-modal .p-dialog-content::-webkit-scrollbar { width: 0.65rem; }
+.services-catalog-modal .p-dialog-content::-webkit-scrollbar { width: 0.5rem; }
 .services-catalog-modal .p-dialog-content::-webkit-scrollbar-track { margin: 0.5rem 0; border-radius: 999px; background: color-mix(in srgb, var(--p-primary-color) 6%, transparent); }
 .services-catalog-modal .p-dialog-content::-webkit-scrollbar-thumb { min-height: 3rem; border: 0.18rem solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--p-primary-color) 48%, transparent); background-clip: padding-box; }
 .services-catalog-modal .p-dialog-content::-webkit-scrollbar-thumb:hover { background: var(--p-primary-color); background-clip: padding-box; }
@@ -210,7 +312,20 @@ const openItem = (item) => {
 .services-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; }
 .services-group--theme { padding-top: 0.25rem; }
 .catalog-theme-editor { width: min(100%, 22rem); }
+.services-group--logout { display: none; }
+.catalog-logout-button { width: 100%; justify-content: center; }
 @media (max-width: 960px) { .services-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .services-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .services-catalog-modal.p-dialog { width: calc(100vw - 1rem) !important; } .services-grid { grid-template-columns: 1fr; } .catalog-section-context-card { align-items: flex-start; flex-wrap: wrap; } .catalog-section-count { margin-left: 3.9rem; } }
+@media (max-width: 760px) {
+    .services-catalog-modal.p-dialog {
+        width: calc(100vw - 1rem) !important;
+        max-width: calc(100vw - 1rem) !important;
+    }
+    .services-catalog-modal .p-dialog-header { padding: 1rem 1rem 0.5rem; font-size: 1.25rem; }
+    .services-catalog-modal .p-dialog-content { padding: 0.6rem 0.8rem 1rem; }
+    .services-catalog-body { gap: 1rem; }
+    .services-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
+    .services-group--logout { display: flex; margin-top: 0.25rem; }
+}
+@media (max-width: 560px) { .catalog-section-context-card { align-items: flex-start; flex-wrap: wrap; } .catalog-section-count { margin-left: 3.9rem; } }
+@media (max-width: 360px) { .services-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 </style>

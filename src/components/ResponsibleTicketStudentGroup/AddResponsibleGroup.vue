@@ -86,6 +86,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
+import { debounce } from 'lodash';
 import axiosInstance from '@/utils/axios';
 
 const showAddDialog = ref(false);
@@ -120,66 +121,20 @@ const yearOptions = computed(() => {
 
 // Группы
 const selectedGroup = ref(null);
-const allGroups = ref([]);
 const filteredGroups = ref([]);
 const loadingGroups = ref(false);
 
 // Пользователи
 const selectedUser = ref(null);
-const allUsers = ref([]);
 const filteredUsers = ref([]);
 const loadingUsers = ref(false);
 const submitting = ref(false);
 
-// Загрузка начальных данных
+// Сброс состояния при открытии диалога (группы не предзагружаем —
+// поиск идёт на сервере после того, как пользователь введёт запрос).
 const loadInitialData = () => {
-    loadGroups();
-    loadUsers();
-};
-
-// Загрузка групп для выбранного года
-const loadGroups = async () => {
-    if (!selectedYear.value) {
-        filteredGroups.value = [];
-        return;
-    }
-
-    loadingGroups.value = true;
-    try {
-        const response = await axiosInstance.get('https://umu.sibadi.org/api/raspGrouplist', {
-            params: { year: selectedYear.value }
-        });
-        
-        allGroups.value = response.data.data.map(group => {
-            if (typeof group === 'string') {
-                return {
-                    label: group,
-                    value: group,
-                    code: extractGroupCode(group)
-                };
-            } else {
-                return {
-                    label: group.name || group.title || group.groupName || JSON.stringify(group),
-                    value: group.id || group.code || group.name,
-                    code: group.code || extractGroupCode(group.name)
-                };
-            }
-        });
-        
-        filteredGroups.value = [...allGroups.value];
-        selectedGroup.value = null;
-    } catch (error) {
-        console.debug("Ошибка при загрузке групп: ", error);
-        window.dispatchEvent(new CustomEvent('toast', {
-            detail: { 
-                severity: 'error', 
-                summary: 'Ошибка', 
-                detail: 'Не удалось загрузить список групп',
-            }
-        }));
-    } finally {
-        loadingGroups.value = false;
-    }
+    selectedGroup.value = null;
+    filteredGroups.value = [];
 };
 
 // Функция для извлечения кода группы из названия
@@ -192,76 +147,112 @@ const extractGroupCode = (groupName) => {
     return '';
 };
 
-// Поиск групп
-const searchGroups = (event) => {
-    const query = event.query || '';
-    
-    if (!query.trim()) {
-        filteredGroups.value = allGroups.value;
+// Серверный поиск групп с дебаунсом (gRPC DeaneryService.GetGroups
+// с фильтром по году и названию, include = AcademicYear).
+const debouncedSearchGroups = debounce(async (query) => {
+    if (!selectedYear.value) {
+        filteredGroups.value = [];
         return;
     }
-    
-    filteredGroups.value = allGroups.value.filter(group => 
-        group.label.toLowerCase().includes(query.toLowerCase()) ||
-        (group.code && group.code.toLowerCase().includes(query.toLowerCase()))
-    );
+
+    const yearStart = parseInt(selectedYear.value, 10);
+
+    try {
+        const { data } = await axiosInstance.get('/api/umu/groups', {
+            params: { year: yearStart, name: query }
+        });
+
+        filteredGroups.value = (data || []).map(group => ({
+            label: group.name,
+            value: group.id,
+            code: extractGroupCode(group.name)
+        }));
+    } catch (error) {
+        console.debug("Ошибка при поиске групп: ", error);
+        window.dispatchEvent(new CustomEvent('toast', {
+            detail: {
+                severity: 'error',
+                summary: 'Ошибка',
+                detail: 'Не удалось выполнить поиск групп',
+            }
+        }));
+        filteredGroups.value = [];
+    } finally {
+        loadingGroups.value = false;
+    }
+}, 300);
+
+// Поиск групп
+const searchGroups = (event) => {
+    const query = (event.query || '').trim();
+
+    if (!query) {
+        filteredGroups.value = [];
+        return;
+    }
+
+    loadingGroups.value = true;
+    debouncedSearchGroups(query);
 };
 
 // Обработчик изменения года
 const onYearChange = () => {
     selectedGroup.value = null;
-    loadGroups();
+    filteredGroups.value = [];
 };
 
-// Загрузка пользователей
-const loadUsers = async () => {
-    if (allUsers.value.length > 0) return;
-    
-    loadingUsers.value = true;
-    try {
-        const payload = {
-            page: 1,
-            pageSize: 500,
-            isBlocked: false
-        };
+// Серверный поиск пользователей с дебаунсом.
+// Введённая строка разбивается на токены и раскладывается по полям
+// так же, как раздельные фильтры на странице пользователей:
+// 1-й токен → фамилия, 2-й → имя, 3-й → отчество, токен с "@" → e-mail.
+const debouncedSearchUsers = debounce(async (query) => {
+    const tokens = query.split(/\s+/).filter(Boolean);
 
-        const response = await axiosInstance.post('/api/users/list', payload);
-        
-        allUsers.value = response.data.entities.map(user => ({
+    const payload = {
+        page: 1,
+        pageSize: 20,
+        isBlocked: false,
+        lastName: tokens[0] ?? null,
+        firstName: tokens[1] ?? null,
+        middleName: tokens[2] ?? null,
+        email: tokens.find(t => t.includes('@')) ?? null,
+        roleIds: null
+    };
+
+    try {
+        const { data } = await axiosInstance.post('/api/users/list', payload);
+
+        filteredUsers.value = (data.entities || []).map(user => ({
             id: user.id,
             fullName: `${user.lastName} ${user.firstName} ${user.middleName || ''}`.trim(),
-            email: user.email,
-            isBlocked: user.isBlocked
+            email: user.email
         }));
-        
-        filteredUsers.value = [...allUsers.value];
     } catch (error) {
-        console.debug("Ошибка при загрузке пользователей: ", error);
+        console.debug("Ошибка при поиске пользователей: ", error);
         window.dispatchEvent(new CustomEvent('toast', {
-            detail: { 
-                severity: 'error', 
-                summary: 'Ошибка', 
-                detail: 'Не удалось загрузить список пользователей',
+            detail: {
+                severity: 'error',
+                summary: 'Ошибка',
+                detail: 'Не удалось выполнить поиск пользователей',
             }
         }));
+        filteredUsers.value = [];
     } finally {
         loadingUsers.value = false;
     }
-};
+}, 300);
 
 // Поиск пользователей
 const searchUsers = (event) => {
-    const query = event.query || '';
-    
-    if (!query.trim()) {
-        filteredUsers.value = allUsers.value;
+    const query = (event.query || '').trim();
+
+    if (!query) {
+        filteredUsers.value = [];
         return;
     }
-    
-    filteredUsers.value = allUsers.value.filter(user => 
-        user.fullName.toLowerCase().includes(query.toLowerCase()) ||
-        user.email?.toLowerCase().includes(query.toLowerCase())
-    );
+
+    loadingUsers.value = true;
+    debouncedSearchUsers(query);
 };
 
 // Сброс формы

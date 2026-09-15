@@ -2,7 +2,9 @@
     <button
         type="button"
         class="catalog-service-card"
+        :class="{ 'catalog-service-card--disabled': item.disabled }"
         :style="cardStyle"
+        :disabled="item.disabled"
         @click="$emit('select', item)"
     >
         <span class="catalog-service-card-top">
@@ -32,11 +34,16 @@ defineEmits(['select']);
 
 const themes = [
     { accent: '#2563eb', soft: 'rgba(59, 130, 246, 0.14)' },
-    { accent: '#b45309', soft: 'rgba(245, 158, 11, 0.15)' },
     { accent: '#15803d', soft: 'rgba(34, 197, 94, 0.14)' },
-    { accent: '#0f766e', soft: 'rgba(20, 184, 166, 0.14)' },
     { accent: '#be185d', soft: 'rgba(236, 72, 153, 0.14)' },
+    { accent: '#0f766e', soft: 'rgba(20, 184, 166, 0.14)' },
     { accent: '#7c3aed', soft: 'rgba(139, 92, 246, 0.14)' },
+    { accent: '#dc2626', soft: 'rgba(239, 68, 68, 0.14)' },
+    { accent: '#4f46e5', soft: 'rgba(99, 102, 241, 0.14)' },
+    { accent: '#0891b2', soft: 'rgba(34, 211, 238, 0.14)' },
+    { accent: '#65a30d', soft: 'rgba(163, 230, 53, 0.15)' },
+    { accent: '#c026d3', soft: 'rgba(232, 121, 249, 0.14)' },
+    { accent: '#b45309', soft: 'rgba(245, 158, 11, 0.15)' },
 ];
 
 const cardStyle = computed(() => {
@@ -137,9 +144,73 @@ const cardStyle = computed(() => {
 .catalog-service-card:hover .catalog-service-icon, .catalog-service-card:focus-visible .catalog-service-icon { transform: rotate(-9deg) scale(1.12); }
 .catalog-service-card:hover .catalog-service-card-footer i, .catalog-service-card:focus-visible .catalog-service-card-footer i { transform: translateX(6px); }
 
+.catalog-service-card--disabled { opacity: 0.72; cursor: not-allowed; }
+.catalog-service-card--disabled:hover,
+.catalog-service-card--disabled:focus-visible { transform: none; box-shadow: 0 14px 30px rgba(15, 23, 42, 0.07); border-color: color-mix(in srgb, var(--catalog-card-accent) 24%, var(--p-grey-4)); outline: none; }
+.catalog-service-card--disabled:hover::before,
+.catalog-service-card--disabled:focus-visible::before { transform: none; }
+.catalog-service-card--disabled:hover::after,
+.catalog-service-card--disabled:focus-visible::after { opacity: 0; transform: translateX(-125%); }
+.catalog-service-card--disabled:hover .catalog-service-icon,
+.catalog-service-card--disabled:focus-visible .catalog-service-icon { transform: none; }
+.catalog-service-card--disabled:hover .catalog-service-card-footer i,
+.catalog-service-card--disabled:focus-visible .catalog-service-card-footer i { transform: none; }
+.catalog-service-card--disabled .catalog-service-badge { color: var(--p-text-muted-color, var(--p-grey-1)); background: color-mix(in srgb, var(--p-text-muted-color, var(--p-grey-1)) 12%, transparent); }
+
 @keyframes catalog-card-in {
     from { opacity: 0; transform: translateY(18px) scale(0.97); }
     to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 760px) {
+    .catalog-service-card {
+        min-height: auto;
+        aspect-ratio: 1 / 1;
+        padding: 0.5rem 0.35rem 0.45rem;
+        border-radius: 14px;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 0.35rem;
+        box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+        animation: none;
+    }
+    .catalog-service-card::before,
+    .catalog-service-card::after { display: none; }
+    .catalog-service-card:active { transform: scale(0.96); }
+    .catalog-service-card:hover,
+    .catalog-service-card:focus-visible { transform: none; }
+
+    .catalog-service-card-top { justify-content: center; gap: 0; }
+    .catalog-service-badge,
+    .catalog-service-card-body small,
+    .catalog-service-card-footer { display: none; }
+
+    .catalog-service-icon {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        max-width: 2.6rem;
+        border-radius: 12px;
+    }
+    .catalog-service-icon i { font-size: 1.2rem; }
+
+    .catalog-service-card-body {
+        margin-top: 0;
+        gap: 0;
+        align-items: center;
+        justify-content: flex-end;
+    }
+    .catalog-service-card-body strong {
+        font-size: 0.62rem;
+        line-height: 1.15;
+        font-weight: 700;
+        letter-spacing: 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

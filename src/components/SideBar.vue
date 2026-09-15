@@ -199,6 +199,8 @@
 
                 <AccentColorEditor :isSideBarCollapse="collapsed" />
 
+                <ThemeSwitcher :isSideBarCollapse="collapsed" />
+
                 <router-link 
                     class="profile" 
                     :to="profileLink"
@@ -258,6 +260,7 @@ import { usePermissionStore } from '@/stores/permissions.js';
 import { disconnectNotificationsHub } from '@/utils/notificationHub.js';
 
 import AccentColorEditor from './Utils/AccentColorEditor.vue';
+import ThemeSwitcher from './Utils/ThemeSwitcher.vue';
 import ServicesCatalogModal from './ServicesCatalogModal.vue';
 
 import { useConfirm } from "primevue/useconfirm";

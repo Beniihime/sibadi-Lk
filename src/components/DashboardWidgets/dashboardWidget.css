@@ -1,0 +1,431 @@
+h3 {
+    margin: 0 !important;
+}
+
+.panel-card {
+    container-type: inline-size;
+    padding: 16px;
+    border-radius: 16px;
+    background: linear-gradient(
+        180deg,
+        rgba(var(--p-primary-500-rgb), 0.03),
+        rgba(255, 255, 255, 0)
+    );
+    border: 1px solid rgba(var(--p-primary-500-rgb), 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    opacity: 0;
+    transform: translateY(14px);
+    animation: revealUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+}
+.panel-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(var(--p-primary-500-rgb), 0.28);
+}
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.panel-header-main,
+.panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+}
+.panel-header-main {
+    flex: 1 1 auto;
+}
+.panel-header-main h3 {
+    margin: 0;
+    white-space: nowrap;
+}
+.panel-header-action {
+    display: grid;
+    width: 2.15rem;
+    height: 2.15rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--p-primary-color) 18%, transparent);
+    border-radius: 0.72rem;
+    background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+    color: var(--p-primary-color);
+    text-decoration: none;
+    cursor: pointer;
+    font: inherit;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.panel-header-action:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--p-primary-color) 36%, transparent);
+    background: color-mix(in srgb, var(--p-primary-color) 16%, transparent);
+}
+.panel-header-action-primary {
+    background: var(--p-primary-color);
+    border-color: var(--p-primary-color);
+    color: var(--p-primary-contrast-color, #fff);
+}
+.panel-header-action-primary:hover {
+    background: var(--p-primary-600);
+}
+.panel-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.panel-header:first-child {
+    color: rgba(var(--p-primary-500-rgb), 0.8);
+}
+
+.panel-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.activity-item {
+    color: var(--p-text-color);
+}
+.activity-item.muted {
+    color: var(--p-text-color);
+    font-size: 0.85rem;
+}
+.recent-tickets {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.recent-ticket {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(var(--p-primary-500-rgb), 0.14);
+    border-radius: 12px;
+    color: inherit;
+    text-decoration: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.recent-ticket:hover {
+    background: rgba(var(--p-primary-500-rgb), 0.08);
+    border-color: rgba(var(--p-primary-500-rgb), 0.3);
+}
+.recent-ticket-main {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+.recent-ticket-main strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.recent-ticket-main span {
+    color: var(--p-grey-2);
+    font-size: 0.78rem;
+}
+
+/* Скелетон (общий) */
+.schedule-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Виджет расписания */
+.schedule-mode-switch :deep(.p-togglebutton-content) {
+    padding: 2px 0.5rem;
+}
+:deep(.p-togglebutton) {
+    background: linear-gradient(
+        180deg,
+        rgba(var(--p-primary-500-rgb), 0.45),
+        rgba(var(--p-primary-500-rgb), 0.05)
+    ) !important;
+}
+:deep(.p-togglebutton-checked::before) {
+    background: rgba(var(--p-primary-400-rgb), 0.35) !important;
+}
+.schedule-mode-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    font-size: 1rem;
+}
+.schedule-current-target {
+    color: var(--p-text-color);
+    font-weight: 600;
+}
+.schedule-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.schedule-state {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.schedule-skeleton-item {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: linear-gradient(
+        180deg,
+        rgba(var(--p-primary-500-rgb), 0.08),
+        rgba(255, 255, 255, 0)
+    );
+    border: 1px solid rgba(var(--p-primary-500-rgb), 0.14);
+}
+.schedule-skeleton-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.schedule-mini-date {
+    font-size: 0.85rem;
+    color: var(--p-grey-2);
+}
+.schedule-mini-item {
+    display: grid;
+    grid-template-rows: auto auto auto;
+    align-items: start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: linear-gradient(
+        180deg,
+        rgba(var(--p-primary-500-rgb), 0.08),
+        rgba(255, 255, 255, 0)
+    );
+    border: 1px solid rgba(var(--p-primary-500-rgb), 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transition: transform 0.24s ease, border-color 0.24s ease;
+}
+.schedule-mini-item:hover {
+    transform: translateX(4px);
+    border-color: rgba(var(--p-primary-500-rgb), 0.26);
+}
+.schedule-badges {
+    color: var(--p-text-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.schedule-time {
+    font-size: 0.85rem;
+    color: var(--p-primary-500);
+    white-space: nowrap;
+    background: rgba(var(--p-primary-500-rgb), 0.12);
+    border: 1px solid rgba(var(--p-primary-500-rgb), 0.2);
+    padding: 4px 8px;
+    border-radius: 999px;
+}
+.schedule-title {
+    font-size: 0.95rem;
+    color: var(--p-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.schedule-room {
+    font-size: 0.85rem;
+    color: var(--p-primary-500);
+    background: rgba(var(--p-primary-500-rgb), 0.12);
+    border: 1px solid rgba(var(--p-primary-500-rgb), 0.2);
+    padding: 4px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+    justify-self: start;
+}
+.schedule-type {
+    font-size: 0.8rem;
+    color: var(--type-color);
+    border: 1px solid color-mix(in srgb, var(--type-color), transparent 60%);
+    background: color-mix(in srgb, var(--type-color), transparent 90%);
+    padding: 4px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.p-dark .schedule-time,
+.p-dark .schedule-room {
+    color: var(--p-primary-200);
+}
+
+.schedule-fade-enter-active,
+.schedule-fade-leave-active {
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.schedule-fade-enter-from,
+.schedule-fade-leave-to {
+    opacity: 0;
+    transform: translateY(6px);
+}
+
+/* Виджет новостей */
+.latest-news {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.latest-news-title {
+    font-size: 1rem;
+    line-height: 1.3;
+    color: var(--p-text-color);
+}
+.latest-news-body {
+    margin: 0;
+    color: var(--p-text-muted-color, var(--p-grey-2));
+    font-size: 0.88rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: pre-line;
+}
+.latest-news-date {
+    color: var(--p-grey-2);
+    font-size: 0.78rem;
+}
+.latest-news-link {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 0.72rem;
+    border: 1px solid color-mix(in srgb, var(--p-primary-color) 18%, transparent);
+    background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+    color: var(--p-primary-color);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.latest-news-link:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--p-primary-color) 36%, transparent);
+    background: color-mix(in srgb, var(--p-primary-color) 16%, transparent);
+}
+.latest-news-link .pi {
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+}
+.latest-news-link:hover .pi {
+    transform: translateX(3px);
+}
+
+@keyframes revealUp {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .panel-card {
+        animation: none !important;
+        transform: none !important;
+        opacity: 1 !important;
+    }
+    .panel-card,
+    .schedule-mini-item {
+        transition: none !important;
+    }
+}
+
+@media (min-width: 641px) and (max-width: 1200px) {
+    .panel-header {
+        align-items: flex-start;
+    }
+
+    .panel-header-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.6rem;
+    }
+
+    .schedule-mode-switch {
+        width: 100%;
+        max-width: 22rem;
+    }
+
+    .schedule-mode-switch :deep(.p-togglebutton) {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+}
+
+@container (max-width: 28rem) {
+    .panel-header {
+        align-items: flex-start;
+    }
+
+    .panel-header-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.6rem;
+    }
+
+    .schedule-mode-switch {
+        width: 100%;
+        max-width: none;
+    }
+
+    .schedule-mode-switch :deep(.p-togglebutton) {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 640px) {
+    .panel-card {
+        border-radius: 18px;
+    }
+    .panel-header {
+        align-items: flex-start;
+        gap: 0.75rem;
+        flex-wrap: nowrap;
+    }
+
+    .panel-header-main {
+        flex: 1;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.65rem;
+    }
+
+    .schedule-mode-switch :deep(.p-togglebutton) {
+        min-height: 2.65rem;
+    }
+
+    .schedule-mode-switch :deep(.p-togglebutton-content) {
+        justify-content: center;
+        padding: 0.35rem 0.7rem;
+    }
+
+    .schedule-mode-icon {
+        min-width: 2rem;
+        font-size: 1.05rem;
+    }
+}

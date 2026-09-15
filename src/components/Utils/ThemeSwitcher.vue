@@ -30,6 +30,7 @@
 import { ref, watch, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { refreshAccentForThemeChange } from '@/utils/accentTheme.js';
+import { useDashboardStore } from '@/stores/dashboard.js';
 
 const props = defineProps({
     isSideBarCollapse: {
@@ -42,14 +43,16 @@ const props = defineProps({
     }
 });
 
+const dashboardStore = useDashboardStore();
+
 const themeOptions = ref([
     { icon: 'pi pi-sun', label: 'Светлая', value: 'light' },
     { icon: 'pi pi-moon', label: 'Тёмная', value: 'dark' },
     { icon: 'pi pi-hourglass', label: 'Авто', value: 'auto' }
 ]);
 
-const savedTheme = themeOptions.value.some(opt => opt.value === localStorage.getItem('theme')) 
-    ? localStorage.getItem('theme') 
+const savedTheme = themeOptions.value.some(opt => opt.value === localStorage.getItem('theme'))
+    ? localStorage.getItem('theme')
     : 'auto';
 const selectedTheme = ref(savedTheme);
 
@@ -74,6 +77,19 @@ onMounted(() => {
 watch(selectedTheme, (newTheme) => {
     localStorage.setItem('theme', newTheme);
     applyTheme(newTheme);
+    // В авторизованном приложении тему синхронизируем с БД (на auth-страницах — только localStorage).
+    if (!isAuthPage.value) {
+        dashboardStore.setThemeMode(newTheme);
+    }
+});
+
+// Поддерживаем актуальное значение переключателя при загрузке темы с сервера
+// (расхождение localStorage между устройствами).
+watch(() => dashboardStore.themeMode, (mode) => {
+    if (isAuthPage.value) return;
+    if (['light', 'dark', 'auto'].includes(mode) && mode !== selectedTheme.value) {
+        selectedTheme.value = mode;
+    }
 });
 
 function applyTheme(theme) {

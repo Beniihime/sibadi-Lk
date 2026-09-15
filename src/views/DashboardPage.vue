@@ -1,5 +1,5 @@
 <template>
-    <main class="dashboard">
+    <main class="dashboard" :class="{ 'dashboard-editing': dashboardStore.editing }">
         <section class="hero">
             <div class="hero-content">
                 <div class="hero-pill">
@@ -9,193 +9,90 @@
                 <h1>Добро пожаловать в ЛКС, {{ firstName }}!</h1>
                 <p class="subtitle">Быстрый доступ к основным разделам и вашей активности</p>
             </div>
+            <div v-if="canEditDashboard" class="hero-edit">
+                <button
+                    v-if="!dashboardStore.editing"
+                    class="edit-toggle"
+                    aria-label="Редактировать главную страницу"
+                    v-tooltip.top="'Редактировать главную'"
+                    @click="dashboardStore.startEdit()"
+                >
+                    <i class="pi pi-pencil"></i>
+                </button>
+                <button
+                    v-else
+                    class="edit-toggle edit-toggle-done"
+                    aria-label="Завершить редактирование"
+                    v-tooltip.top="'Готово'"
+                    @click="dashboardStore.endEdit()"
+                >
+                    <i class="pi pi-check"></i>
+                </button>
+            </div>
         </section>
 
-        <section class="overview-grid">
-            <div class="panel-card schedule-overview-card">
-                <div class="panel-header">
-                    <div class="panel-header-main">
-                        <h3>Расписание</h3>
-                        <SelectButton
-                            v-model="selectedScheduleType"
-                            :options="scheduleModeOptions"
-                            optionValue="value"
-                            class="schedule-mode-switch"
-                        >
-                            <template #option="{ option }">
-                                <span class="schedule-mode-icon" :title="option.label">
-                                    <i :class="option.icon"></i>
-                                </span>
-                            </template>
-                        </SelectButton>
-                    </div>
-                    <router-link class="panel-header-action" to="/schedule" aria-label="Открыть расписание" v-tooltip.top="'Открыть расписание'">
-                        <i class="pi pi-arrow-up-right"></i>
-                    </router-link>
-                </div>
-                <div class="panel-content">
-                    <div v-if="scheduleSelection.name" class="schedule-current-target">
-                        {{ scheduleSelection.name }}
-                    </div>
-                    <Transition name="schedule-fade" mode="out-in">
-                        <div :key="scheduleViewState" class="schedule-state">
-                            <div v-if="scheduleViewState === 'no-selection'" class="activity-item muted">
-                                Выберите {{ selectedScheduleTargetLabel }} в расписании, чтобы отобразить
-                            </div>
-                            <div v-else-if="scheduleViewState === 'loading'" class="schedule-skeleton">
-                                <Skeleton width="11rem" height="0.9rem" borderRadius="8px" />
-
-                                <div v-for="item in 3" :key="`schedule-skeleton-${item}`" class="schedule-skeleton-item">
-                                    <div class="schedule-skeleton-badges">
-                                        <Skeleton width="7.2rem" height="1.65rem" borderRadius="999px" />
-                                        <Skeleton width="5.6rem" height="1.55rem" borderRadius="999px" />
-                                    </div>
-                                    <Skeleton width="92%" height="1rem" borderRadius="8px" />
-                                    <Skeleton width="5.4rem" height="1.55rem" borderRadius="999px" />
-                                </div>
-                            </div>
-                            <div v-else-if="scheduleViewState === 'empty'" class="activity-item muted">
-                                Ближайших занятий нет
-                            </div>
-                            <div v-else class="schedule-mini">
-                                <div class="schedule-mini-date">Ближайшая дата: {{ scheduleDateLabel }}</div>
-                                <div v-for="lesson in todayLessons" :key="lesson.key" class="schedule-mini-item">
-                                    <div class="schedule-badges">
-                                        <span class="schedule-time badge">{{ lesson.time }}</span>
-                                        <span
-                                            v-if="lesson.type"
-                                            class="schedule-type badge"
-                                            :style="{ '--type-color': `var(--p-${lesson.typeColor}-500)` }"
-                                        >
-                                            {{ lesson.type }}
-                                        </span>
-                                    </div>
-                                    <span class="schedule-title">{{ lesson.title }}</span>
-                                    <span class="schedule-room badge" v-if="lesson.room">{{ lesson.room }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </Transition>
-                </div>
+        <!-- Телефон: одна плоская колонка всех размещённых виджетов -->
+        <section v-if="isPhone" class="overview-grid overview-grid-phone">
+            <div
+                v-for="id in placedFlat"
+                :key="id"
+                class="widget-slot"
+            >
+                <component
+                    :is="WIDGETS_BY_ID[id].component"
+                    v-bind="widgetBindings(id)"
+                    :ref="(el) => setWidgetRef(id, el)"
+                />
             </div>
+        </section>
 
-            <div class="overview-column">
-                <div class="panel-card">
-                    <div class="panel-header">
-                        <h3>Последние заявки</h3>
-                        <div class="panel-header-actions">
-                            <router-link
-                                v-if="showRequests"
-                                class="panel-header-action panel-header-action-primary"
-                                :to="{ path: '/requests', query: { create: '1' } }"
-                                aria-label="Создать заявку"
-                                v-tooltip.top="'Создать заявку'"
-                            >
-                                <i class="pi pi-plus"></i>
-                            </router-link>
-                            <router-link class="panel-header-action" to="/requests" aria-label="Открыть заявки" v-tooltip.top="'Открыть заявки'">
-                                <i class="pi pi-arrow-up-right"></i>
-                            </router-link>
-                        </div>
-                    </div>
-                    <div class="panel-content">
-                        <div v-if="recentTicketsLoading" class="schedule-skeleton">
-                            <Skeleton v-for="item in 3" :key="`ticket-skeleton-${item}`" width="100%" height="2.7rem" borderRadius="10px" />
-                        </div>
-                        <div v-else-if="recentTickets.length" class="recent-tickets">
-                            <router-link
-                                v-for="ticket in recentTickets"
-                                :key="ticket.id"
-                                class="recent-ticket"
-                                :to="{ path: '/requests', query: { callId: ticket.id } }"
-                            >
-                                <div class="recent-ticket-main">
-                                    <strong>{{ ticket.callSummaryName || ticket.fullName || `Заявка №${ticket.number}` }}</strong>
-                                    <span>{{ formatTicketDate(ticket.utcDateRegistered || ticket.utcDateModified) }}</span>
-                                </div>
-                                <Tag :value="ticket.entityStateName || 'Не указан'" :severity="getTicketStatusSeverity(ticket.entityStateName)" />
-                            </router-link>
-                        </div>
-                        <AsyncState
-                            v-else-if="recentTicketsError"
-                            tone="error"
-                            icon="pi pi-exclamation-triangle"
-                            title="Не удалось загрузить заявки"
-                            description="Проверьте соединение и попробуйте ещё раз."
-                            retry
-                            @retry="fetchRecentTickets"
+        <!-- Десктоп/планшет: 3 колонки -->
+        <section v-else class="overview-grid">
+            <div
+                v-for="(col, columnIndex) in dashboardStore.columns"
+                :key="columnIndex"
+                class="overview-column"
+            >
+                <VueDraggable
+                    v-if="dashboardStore.editing"
+                    :model-value="dashboardStore.columns[columnIndex]"
+                    :group="{ name: 'widgets', pull: true, put: true }"
+                    :animation="180"
+                    handle=".widget-drag-handle"
+                    class="overview-column-drag"
+                    ghost-class="widget-ghost"
+                    @update:model-value="(val) => dashboardStore.setColumn(columnIndex, val)"
+                    @end="dashboardStore.touch()"
+                >
+                    <div
+                        v-for="id in col"
+                        :key="id"
+                        class="widget-slot widget-slot-edit"
+                    >
+                        <span class="widget-drag-handle" title="Перетащите виджет">
+                            <i class="pi pi-bars"></i>
+                        </span>
+                        <component
+                            :is="WIDGETS_BY_ID[id].component"
+                            v-bind="widgetBindings(id)"
+                            :ref="(el) => setWidgetRef(id, el)"
                         />
-                        <div v-else class="activity-item muted">
-                            {{ showRequests ? 'Незакрытых заявок нет' : 'Заявки недоступны' }}
-                        </div>
                     </div>
-                </div>
+                </VueDraggable>
 
-                <div v-if="showTicketsShortcut" class="panel-card tickets-overview-card">
-                    <div class="panel-header">
-                        <h3>Справки</h3>
-                        <div class="panel-header-actions">
-                            <button
-                                v-if="canCreateStudentTickets"
-                                class="panel-header-action panel-header-action-primary"
-                                aria-label="Создать справку"
-                                v-tooltip.top="'Создать справку'"
-                                @click="openCertificateModal"
-                            >
-                                <i class="pi pi-plus"></i>
-                            </button>
-                            <router-link class="panel-header-action" :to="ticketsDashboardLink" aria-label="Открыть справки" v-tooltip.top="'Открыть справки'">
-                                <i class="pi pi-arrow-up-right"></i>
-                            </router-link>
-                        </div>
+                <template v-else>
+                    <div
+                        v-for="id in col"
+                        :key="id"
+                        class="widget-slot"
+                    >
+                        <component
+                            :is="WIDGETS_BY_ID[id].component"
+                            v-bind="widgetBindings(id)"
+                            :ref="(el) => setWidgetRef(id, el)"
+                        />
                     </div>
-                    <div class="panel-content">
-                        <div v-if="recentCertificatesLoading" class="schedule-skeleton">
-                            <Skeleton v-for="item in 3" :key="`certificate-skeleton-${item}`" width="100%" height="2.7rem" borderRadius="10px" />
-                        </div>
-                        <div v-else-if="recentCertificates.length" class="recent-tickets">
-                            <router-link
-                                v-for="ticket in recentCertificates"
-                                :key="ticket.id"
-                                class="recent-ticket"
-                                to="/tickets/my-requests"
-                            >
-                                <div class="recent-ticket-main">
-                                    <strong>{{ ticket.requestType?.title || ticket.requestType?.name || `Справка №${ticket.number}` }}</strong>
-                                    <span>{{ formatCertificateDate(ticket.createdAt || ticket.updatedAt) }}</span>
-                                </div>
-                                <Tag :value="getCertificateStatusLabel(ticket.status)" :severity="getCertificateStatusSeverity(ticket.status)" />
-                            </router-link>
-                        </div>
-                        <div v-else class="activity-item muted">Оформляйте справки и отслеживайте их готовность здесь.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel-card news-overview-card">
-                <div class="panel-header">
-                    <h3>Новости</h3>
-                    <router-link class="panel-header-action" to="/news" aria-label="Открыть новости" v-tooltip.top="'Открыть новости'">
-                        <i class="pi pi-arrow-up-right"></i>
-                    </router-link>
-                </div>
-                <div class="panel-content">
-                    <div v-if="latestNewsLoading" class="schedule-skeleton">
-                        <Skeleton width="70%" height="1.1rem" borderRadius="8px" />
-                        <Skeleton width="100%" height="2.7rem" borderRadius="10px" />
-                        <Skeleton width="40%" height="0.9rem" borderRadius="8px" />
-                    </div>
-                    <div v-else-if="latestNews" class="latest-news">
-                        <strong class="latest-news-title">{{ latestNews.title || 'Без заголовка' }}</strong>
-                        <p v-if="latestNews.body" class="latest-news-body">{{ latestNews.body }}</p>
-                        <span v-if="latestNews.createdAt" class="latest-news-date">{{ formatLatestNewsDate(latestNews.createdAt) }}</span>
-                        <router-link to="/news" class="latest-news-link">
-                            <span>Все новости</span>
-                            <i class="pi pi-arrow-right"></i>
-                        </router-link>
-                    </div>
-                    <div v-else class="activity-item muted">Новостей пока нет</div>
-                </div>
+                </template>
             </div>
         </section>
 
@@ -208,181 +105,49 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import axios from 'axios';
-import axiosInstance from '@/utils/axios.js';
-import AsyncState from '@/components/Utils/AsyncState.vue';
+import { computed } from 'vue';
+import { onMounted, ref } from 'vue';
+import { VueDraggable } from 'vue-draggable-plus';
 import StudentTicketCreateDialog from '@/components/Tickets/StudentTicketCreateDialog.vue';
-import { usePermissionStore } from '@/stores/permissions.js';
-import { getRequestAccess } from '@/utils/requestAccess.js';
+import { useDashboardStore } from '@/stores/dashboard.js';
+import { WIDGETS_BY_ID } from '@/config/dashboardWidgets.js';
+import { useResponsiveLayout } from '@/composables/useResponsiveLayout.js';
 import { getCurrentUser } from '@/utils/currentUser.js';
-import { formatDateOmskFromUtcString, formatDateRuLongWithTime } from '@/utils/date.js';
-import { getInfraStatusSeverity } from '@/utils/infraStatus.js';
-import { listMyTickets } from '@/api/tickets.js';
-import { getVisiblePosts, normalizePostsResponse } from '@/api/news.js';
-import { requestMocks, ticketMocks, USE_MOCK_DATA } from '@/config/mockRuntime.js';
-import {
-    buildSchedulePath,
-    getLastScheduleSelection,
-    getScheduleSelectionByType,
-    normalizeScheduleType,
-    SCHEDULE_TYPE_GROUP,
-    SCHEDULE_TYPE_ROOM,
-    SCHEDULE_TYPE_TEACHER
-} from '@/utils/scheduleStorage.js';
 
-const DASHBOARD_SCHEDULE_TYPE_KEY = 'dashboardScheduleType';
-const permissionStore = usePermissionStore();
+const dashboardStore = useDashboardStore();
+const { isPhone, isDesktop } = useResponsiveLayout();
+
+const canEditDashboard = computed(() => isDesktop.value);
 const firstName = ref(localStorage.getItem('firstName') || '');
-const roleTitle = ref('');
-const isBlocked = ref(false);
-const infraStatusText = ref('—');
-const showRequests = ref(localStorage.getItem('InfraStatus') === 'true');
-const todayLessons = ref([]);
-const scheduleDateLabel = ref('');
-const isScheduleLoading = ref(false);
-const recentTickets = ref([]);
-const recentTicketsLoading = ref(false);
-const recentTicketsError = ref(false);
-const recentCertificates = ref([]);
-const recentCertificatesLoading = ref(false);
-const latestNews = ref(null);
-const latestNewsLoading = ref(false);
-let scheduleRequestId = 0;
-
-const scheduleModeOptions = [
-    { label: 'Группа', value: SCHEDULE_TYPE_GROUP, icon: 'pi pi-users' },
-    { label: 'Аудитория', value: SCHEDULE_TYPE_ROOM, icon: 'pi pi-building' },
-    { label: 'Преподаватель', value: SCHEDULE_TYPE_TEACHER, icon: 'pi pi-user' }
-];
-
-const lastSchedule = getLastScheduleSelection();
-const savedDashboardType = localStorage.getItem(DASHBOARD_SCHEDULE_TYPE_KEY);
-const selectedScheduleType = ref(normalizeScheduleType(lastSchedule.type || savedDashboardType));
-const scheduleSelection = ref(getScheduleSelectionByType(selectedScheduleType.value));
-
-const selectedScheduleTargetLabel = computed(() => ({
-    [SCHEDULE_TYPE_GROUP]: 'группу',
-    [SCHEDULE_TYPE_ROOM]: 'аудиторию',
-    [SCHEDULE_TYPE_TEACHER]: 'преподавателя',
-}[selectedScheduleType.value] || 'группу'));
-const scheduleViewState = computed(() => {
-    if (!scheduleSelection.value.id) return 'no-selection';
-    if (isScheduleLoading.value) return 'loading';
-    if (todayLessons.value.length === 0) return 'empty';
-    return 'content';
-});
-
-const openScheduleLink = computed(() => buildSchedulePath(selectedScheduleType.value, scheduleSelection.value.id));
-const canReadTickets = computed(() => permissionStore.hasPermission('Tickets', 'Read'));
-const canAccessStudentTickets = computed(() => (
-    permissionStore.hasPermission('TicketsStudent', 'Read')
-    || permissionStore.hasPermission('TicketsStudent', 'Create')
-));
-const canCreateStudentTickets = computed(() => permissionStore.hasPermission('TicketsStudent', 'Create'));
-const showTicketsShortcut = computed(() => canReadTickets.value || canAccessStudentTickets.value);
-const ticketsDashboardLink = computed(() => '/tickets/my-requests');
 const createCertificateDialogRef = ref(null);
+const widgetRefs = {};
+
+const setWidgetRef = (id, el) => {
+    if (el) {
+        widgetRefs[id] = el;
+    } else {
+        delete widgetRefs[id];
+    }
+};
+
+/**
+ * Все размещённые id по порядку колонок — для плоского вида на телефоне.
+ */
+const placedFlat = computed(() => dashboardStore.columns.flat());
+
+const widgetBindings = (id) => {
+    if (id === 'certificates') {
+        return { onOpenCreateDialog: openCertificateModal };
+    }
+    return {};
+};
 
 const openCertificateModal = () => {
     createCertificateDialogRef.value?.openModal?.();
 };
 
 const onCertificateCreated = () => {
-    fetchRecentCertificates();
-};
-
-const getTicketStatusSeverity = getInfraStatusSeverity;
-const formatTicketDate = (date) => formatDateOmskFromUtcString(date);
-const formatCertificateDate = (date) => formatDateRuLongWithTime(date);
-const formatLatestNewsDate = (date) => formatDateRuLongWithTime(date);
-const getCertificateStatusSeverity = (status) => ({
-    New: 'info',
-    Open: 'warning',
-    Assigned: 'info',
-    Pending: 'warning',
-    Resolved: 'success',
-    Closed: 'secondary',
-    Cancelled: 'danger',
-}[status] || 'contrast');
-const getCertificateStatusLabel = (status) => ({
-    New: 'Новая',
-    Open: 'Открыта',
-    Assigned: 'В работе',
-    Pending: 'Ожидание',
-    Resolved: 'Готова',
-    Closed: 'Закрыта',
-    Cancelled: 'Отменена',
-}[status] || status || 'Не указан');
-
-const fetchRecentTickets = async () => {
-    if (!showRequests.value) {
-        recentTickets.value = [];
-        return;
-    }
-
-    recentTicketsLoading.value = true;
-    recentTicketsError.value = false;
-    try {
-        if (USE_MOCK_DATA) {
-            recentTickets.value = requestMocks.slice(0, 3);
-            return;
-        }
-
-        const response = await axiosInstance.get('/api/infra-manager/users/me/calls', {
-            params: { page: 1, pageSize: 20 },
-        });
-        recentTickets.value = (response.data?.entities || [])
-            .filter((ticket) => ticket.entityStateName !== 'Закрыта' && !ticket.utcDateClosed)
-            .sort((left, right) => new Date(right.utcDateRegistered || right.utcDateModified) - new Date(left.utcDateRegistered || left.utcDateModified))
-            .slice(0, 3);
-    } catch (error) {
-        console.debug('Ошибка при загрузке последних заявок:', error);
-        recentTickets.value = [];
-        recentTicketsError.value = true;
-    } finally {
-        recentTicketsLoading.value = false;
-    }
-};
-
-const fetchRecentCertificates = async () => {
-    if (!canAccessStudentTickets.value) {
-        recentCertificates.value = [];
-        return;
-    }
-
-    recentCertificatesLoading.value = true;
-    try {
-        if (USE_MOCK_DATA) {
-            recentCertificates.value = (ticketMocks.mockTickets?.tickets || []).slice(0, 3);
-            return;
-        }
-
-        const response = await listMyTickets({ page: 1, pageSize: 3 });
-        recentCertificates.value = (response.data?.tickets || [])
-            .slice()
-            .sort((left, right) => new Date(right.createdAt || right.updatedAt) - new Date(left.createdAt || left.updatedAt))
-            .slice(0, 3);
-    } catch (error) {
-        console.debug('Ошибка при загрузке последних справок:', error);
-        recentCertificates.value = [];
-    } finally {
-        recentCertificatesLoading.value = false;
-    }
-};
-
-const fetchLatestNews = async () => {
-    latestNewsLoading.value = true;
-    try {
-        const response = await getVisiblePosts({ page: 1, pageSize: 1 });
-        const { posts } = normalizePostsResponse(response.data);
-        latestNews.value = posts[0] || null;
-    } catch (error) {
-        console.debug('Ошибка при загрузке последней новости:', error);
-        latestNews.value = null;
-    } finally {
-        latestNewsLoading.value = false;
-    }
+    widgetRefs.certificates?.refetch?.();
 };
 
 const fetchUserStatus = async () => {
@@ -390,189 +155,21 @@ const fetchUserStatus = async () => {
         const me = await getCurrentUser();
         firstName.value = me.firstName || '';
         localStorage.setItem('firstName', firstName.value);
-        roleTitle.value = me.roles?.[0]?.title || '';
-        isBlocked.value = !!me.isBlocked;
     } catch (error) {
         console.debug('Ошибка при загрузке статуса пользователя:', error);
     }
 };
-
-const fetchRequestAvailability = async () => {
-    const requestAccess = await getRequestAccess();
-    showRequests.value = requestAccess.showRequests;
-};
-
-const formatLocalDate = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
-const getScheduleParamName = (type) => {
-    if (type === SCHEDULE_TYPE_ROOM) return 'idAudLine';
-    if (type === SCHEDULE_TYPE_TEACHER) return 'idTeacher';
-    return 'idGroup';
-};
-
-const fetchScheduleForDate = async (date) => {
-    if (!scheduleSelection.value.id) return [];
-
-    try {
-        const formattedDate = formatLocalDate(date);
-        const paramName = getScheduleParamName(selectedScheduleType.value);
-        const response = await axios.get(
-            `https://umu.sibadi.org/api/Rasp?${paramName}=${scheduleSelection.value.id}&sdate=${formattedDate}`
-        );
-        const lessons = response.data?.data?.rasp || [];
-        return lessons.filter((lesson) => {
-            if (!lesson?.дата) return false;
-            const lessonDate = new Date(lesson.дата);
-            return formatLocalDate(lessonDate) === formattedDate;
-        });
-    } catch (error) {
-        return [];
-    }
-};
-
-const cleanDiscipline = (discipline) => {
-    const match = discipline?.match(/^(лек|лаб|пр|экз|зач)\s*/i, '');
-    let type = '';
-    let color = 'blue';
-    if (match) {
-        const typeAbbr = match[1].toLowerCase();
-        switch (typeAbbr) {
-            case 'лек':
-                type = 'Лекция';
-                color = 'green';
-                break;
-            case 'лаб':
-                type = 'Лабораторная';
-                color = 'purple';
-                break;
-            case 'пр':
-                type = 'Практика';
-                color = 'amber';
-                break;
-            case 'экз':
-                type = 'Экзамен';
-                color = 'sky';
-                break;
-            case 'зач':
-                type = 'Зачет';
-                color = 'sky';
-                break;
-            default:
-                type = '';
-        }
-    }
-    return {
-        cleanedDiscipline: discipline?.replace(/^(лек|лаб|пр.|экз|зач)\s*/i, '') || discipline,
-        type,
-        color
-    };
-};
-
-const setScheduleLessons = (lessons, date) => {
-    const mapRoom = (lesson) => {
-        if (selectedScheduleType.value === SCHEDULE_TYPE_GROUP) return lesson.аудитория;
-        if (selectedScheduleType.value === SCHEDULE_TYPE_ROOM) return lesson.группа;
-        return lesson.аудитория || lesson.группа;
-    };
-
-    todayLessons.value = lessons.slice(0, 4).map((lesson, index) => ({
-        key: lesson.код || index,
-        time: `${lesson.начало.replace('-', ':')} - ${lesson.конец.replace('-', ':')}`,
-        title: cleanDiscipline(lesson.дисциплина).cleanedDiscipline,
-        type: cleanDiscipline(lesson.дисциплина).type,
-        typeColor: cleanDiscipline(lesson.дисциплина).color,
-        room: mapRoom(lesson)
-    }));
-    scheduleDateLabel.value = date.toLocaleDateString('ru-RU', {
-        weekday: 'short',
-        day: '2-digit',
-        month: 'long'
-    });
-};
-
-const fetchNearestSchedule = async () => {
-    const requestId = ++scheduleRequestId;
-
-    if (!scheduleSelection.value.id) {
-        isScheduleLoading.value = false;
-        todayLessons.value = [];
-        scheduleDateLabel.value = '';
-        return;
-    }
-
-    isScheduleLoading.value = true;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    try {
-        for (let offset = 0; offset <= 7; offset += 1) {
-            if (requestId !== scheduleRequestId) return;
-
-            const date = new Date(today);
-            date.setDate(today.getDate() + offset);
-            const lessons = await fetchScheduleForDate(date);
-
-            if (requestId !== scheduleRequestId) return;
-
-            if (lessons.length > 0) {
-                setScheduleLessons(lessons, date);
-                return;
-            }
-        }
-
-        todayLessons.value = [];
-        scheduleDateLabel.value = '';
-    } finally {
-        if (requestId === scheduleRequestId) {
-            isScheduleLoading.value = false;
-        }
-    }
-};
-
-watch(selectedScheduleType, (newType) => {
-    localStorage.setItem(DASHBOARD_SCHEDULE_TYPE_KEY, newType);
-    scheduleSelection.value = getScheduleSelectionByType(newType);
-    fetchNearestSchedule();
-});
-
-watch(showRequests, (canRead) => {
-    if (canRead) {
-        fetchRecentTickets();
-    } else {
-        recentTickets.value = [];
-    }
-}, { immediate: true });
-
-watch(canAccessStudentTickets, (canRead) => {
-    if (canRead) {
-        fetchRecentCertificates();
-    } else {
-        recentCertificates.value = [];
-    }
-}, { immediate: true });
 
 onMounted(() => {
     const cleanUrl = window.location.origin + window.location.pathname;
     window.history.replaceState({}, document.title, cleanUrl);
 
     fetchUserStatus();
-    fetchRequestAvailability();
-    scheduleSelection.value = getScheduleSelectionByType(selectedScheduleType.value);
-    fetchNearestSchedule();
-    fetchLatestNews();
+    dashboardStore.load();
 });
 </script>
 
 <style scoped>
-h3 {
-    margin: 0 !important;
-}
 .dashboard {
     position: relative;
     display: flex;
@@ -596,6 +193,10 @@ h3 {
     animation: driftBg 14s ease-in-out infinite alternate;
 }
 .hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
     padding: 0.35rem 0 0.15rem;
     opacity: 0;
     transform: translateY(12px);
@@ -621,429 +222,113 @@ h3 {
     color: var(--p-primary-color);
     margin-bottom: 12px;
 }
-.hero-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 16px;
-    flex-wrap: wrap;
-}
-.hero-cta {
-    text-decoration: none;
-    padding: 10px 16px;
-    border-radius: 16px;
-    background: rgba(var(--p-primary-500-rgb), 0.16);
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.24);
-    color: var(--p-text-color);
-    font-weight: 600;
-    transition: all 0.2s ease;
-}
-.hero-cta:hover {
-    transform: translateY(-1px);
-    border-color: rgba(var(--p-primary-500-rgb), 0.36);
-}
-.hero-cta.secondary {
-    background: transparent;
-}
 .subtitle {
     margin: 0;
     color: var(--p-grey-2);
 }
-.overview-grid h3 {
-    margin: 0 0 12px;
-    color: var(--p-text-color);
-}
-.actions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-}
-.action-card {
+
+.hero-edit {
+    flex: 0 0 auto;
     display: flex;
-    gap: 12px;
     align-items: center;
-    padding: 14px 16px;
-    border-radius: 16px;
-    text-decoration: none;
-    color: var(--p-text-color);
-    background: linear-gradient(
-        180deg,
-        rgba(var(--p-primary-500-rgb), 0.04),
-        rgba(255, 255, 255, 0)
-    );
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.14);
-    transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
-    opacity: 0;
-    transform: translateY(16px);
-    animation: revealUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-.action-card:hover {
-    border-color: rgba(var(--p-primary-500-rgb), 0.3);
-    transform: translateY(-4px);
-    box-shadow: 0 10px 24px rgba(var(--p-primary-500-rgb), 0.12);
-}
-.action-card:nth-child(1) { animation-delay: 0.16s; }
-.action-card:nth-child(2) { animation-delay: 0.24s; }
-.action-card:nth-child(3) { animation-delay: 0.32s; }
-.action-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 16px;
-    display: flex;
+.edit-toggle {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: rgba(var(--p-primary-500-rgb), 0.12);
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.2);
+    width: 2.3rem;
+    height: 2.3rem;
+    padding: 0;
+    border-radius: 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--p-primary-color) 24%, transparent);
+    background: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
+    color: var(--p-primary-color);
+    font: inherit;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
-.action-card .pi {
-    font-size: 1.2rem;
-    color: rgba(var(--p-primary-500-rgb), 0.8);
+.edit-toggle:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--p-primary-color) 42%, transparent);
+    background: color-mix(in srgb, var(--p-primary-color) 18%, transparent);
 }
-.action-title {
-    font-weight: 600;
+.edit-toggle-done {
+    background: var(--p-primary-color);
+    border-color: var(--p-primary-color);
+    color: var(--p-primary-contrast-color, #fff);
 }
-.action-subtitle {
-    font-size: 0.85rem;
-    color: var(--p-grey-2);
+.edit-toggle-done:hover {
+    background: var(--p-primary-600);
 }
+
 .overview-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
     gap: 16px;
 }
-.panel-card {
-    container-type: inline-size;
-    padding: 16px;
-    border-radius: 16px;
-    background: linear-gradient(
-        180deg,
-        rgba(var(--p-primary-500-rgb), 0.03),
-        rgba(255, 255, 255, 0)
-    );
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.12);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    opacity: 0;
-    transform: translateY(14px);
-    animation: revealUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
-}
-.panel-card:hover {
-    transform: translateY(-3px);
-    border-color: rgba(var(--p-primary-500-rgb), 0.28);
-}
-.overview-grid .panel-card:nth-child(1) { animation-delay: 0.38s; }
-.overview-grid .panel-card:nth-child(3) { animation-delay: 0.54s; }
 .overview-column {
     display: flex;
     flex-direction: column;
     gap: 16px;
     min-width: 0;
+    min-height: 0;
 }
-.overview-column > .panel-card:nth-child(1) { animation-delay: 0.46s; }
-.overview-column > .panel-card:nth-child(2) { animation-delay: 0.54s; }
-.panel-header {
+.overview-column-drag {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 220px;
+    padding: 4px;
+    border-radius: 16px;
+    border: 1px dashed transparent;
+    transition: border-color 0.2s ease, background 0.2s ease;
 }
-.panel-header-main,
-.panel-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
+.dashboard-editing .overview-column-drag {
+    border-color: rgba(var(--p-primary-500-rgb), 0.22);
+    background: rgba(var(--p-primary-500-rgb), 0.03);
+}
+
+.widget-slot {
+    position: relative;
     min-width: 0;
 }
-.panel-header-main {
-    flex: 1 1 auto;
+.widget-slot-edit {
+    cursor: grab;
 }
-.panel-header-main h3 {
-    margin: 0;
-    white-space: nowrap;
+.widget-slot-edit:active {
+    cursor: grabbing;
 }
-.panel-header-action {
-    display: grid;
-    width: 2.15rem;
-    height: 2.15rem;
-    flex: 0 0 auto;
-    place-items: center;
-    border: 1px solid color-mix(in srgb, var(--p-primary-color) 18%, transparent);
-    border-radius: 0.72rem;
-    background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
-    color: var(--p-primary-color);
-    text-decoration: none;
-    cursor: pointer;
-    font: inherit;
-    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-}
-.panel-header-action:hover {
-    transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--p-primary-color) 36%, transparent);
-    background: color-mix(in srgb, var(--p-primary-color) 16%, transparent);
-}
-.panel-header-action-primary {
-    background: var(--p-primary-color);
-    border-color: var(--p-primary-color);
-    color: var(--p-primary-contrast-color, #fff);
-}
-.panel-header-action-primary:hover {
-    background: var(--p-primary-600);
-}
-.panel-title {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.panel-header:first-child {
-    color: rgba(var(--p-primary-500-rgb), 0.8);
-}
-
-.panel-content {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.schedule-mode-switch :deep(.p-togglebutton-content) {
-    padding: 2px 0.5rem;
-}
-
-:deep(.p-togglebutton) {
-    background: linear-gradient(
-        180deg,
-        rgba(var(--p-primary-500-rgb), 0.45),
-        rgba(var(--p-primary-500-rgb), 0.05)
-    ) !important;
-}
-:deep(.p-togglebutton-checked::before) {
-    background: rgba(var(--p-primary-400-rgb), 0.35) !important;
-}
-.schedule-mode-icon {
+.widget-drag-handle {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 4;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 24px;
-    font-size: 1rem;
-}
-.schedule-current-target {
-    color: var(--p-text-color);
-    font-weight: 600;
-}
-.activity-item {
-    color: var(--p-text-color);
-}
-.activity-item.muted {
-    color: var(--p-text-color);
-    font-size: 0.85rem;
-}
-.recent-tickets {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.recent-ticket {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 12px;
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.14);
-    border-radius: 12px;
-    color: inherit;
-    text-decoration: none;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-.recent-ticket:hover {
-    background: rgba(var(--p-primary-500-rgb), 0.08);
-    border-color: rgba(var(--p-primary-500-rgb), 0.3);
-}
-.recent-ticket-main {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 2px;
-}
-.recent-ticket-main strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.recent-ticket-main span {
-    color: var(--p-grey-2);
-    font-size: 0.78rem;
-}
-.latest-news {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-.latest-news-title {
-    font-size: 1rem;
-    line-height: 1.3;
-    color: var(--p-text-color);
-}
-.latest-news-body {
-    margin: 0;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 0.55rem;
     color: var(--p-text-muted-color, var(--p-grey-2));
-    font-size: 0.88rem;
-    line-height: 1.45;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    white-space: pre-line;
-}
-.latest-news-date {
-    color: var(--p-grey-2);
-    font-size: 0.78rem;
-}
-.latest-news-link {
-    display: inline-flex;
-    align-items: center;
-    align-self: flex-start;
-    gap: 0.4rem;
-    margin-top: 0.35rem;
-    padding: 0.5rem 0.85rem;
-    border-radius: 0.72rem;
-    border: 1px solid color-mix(in srgb, var(--p-primary-color) 18%, transparent);
-    background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
-    color: var(--p-primary-color);
-    font-weight: 700;
-    font-size: 0.85rem;
-    text-decoration: none;
-    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-}
-.latest-news-link:hover {
-    transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--p-primary-color) 36%, transparent);
-    background: color-mix(in srgb, var(--p-primary-color) 16%, transparent);
-}
-.latest-news-link .pi {
-    font-size: 0.8rem;
-    transition: transform 0.2s ease;
-}
-.latest-news-link:hover .pi {
-    transform: translateX(3px);
-}
-.schedule-mini {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.schedule-state {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.schedule-skeleton {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.schedule-skeleton-item {
-    display: grid;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 16px;
-    background: linear-gradient(
-        180deg,
-        rgba(var(--p-primary-500-rgb), 0.08),
-        rgba(255, 255, 255, 0)
-    );
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.14);
-}
-.schedule-skeleton-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-.schedule-mini-date {
-    font-size: 0.85rem;
-    color: var(--p-grey-2);
-}
-.schedule-mini-item {
-    display: grid;
-    grid-template-rows: auto auto auto;
-    align-items: start;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 16px;
-    background: linear-gradient(
-        180deg,
-        rgba(var(--p-primary-500-rgb), 0.08),
-        rgba(255, 255, 255, 0)
-    );
+    background: color-mix(in srgb, var(--p-bg-color-1) 70%, transparent);
     border: 1px solid rgba(var(--p-primary-500-rgb), 0.16);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    transition: transform 0.24s ease, border-color 0.24s ease;
+    cursor: grab;
+    opacity: 0.85;
+    transition: opacity 0.2s ease, background 0.2s ease;
 }
-.schedule-mini-item:hover {
-    transform: translateX(4px);
-    border-color: rgba(var(--p-primary-500-rgb), 0.26);
+.widget-drag-handle:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--p-primary-color) 14%, transparent);
+    color: var(--p-primary-color);
 }
-.schedule-badges {
-    color: var(--p-text-color);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-}
-.badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.schedule-time {
-    font-size: 0.85rem;
-    color: var(--p-primary-500);
-    white-space: nowrap;
-    background: rgba(var(--p-primary-500-rgb), 0.12);
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.2);
-    padding: 4px 8px;
-    border-radius: 999px;
-}
-.schedule-title {
-    font-size: 0.95rem;
-    color: var(--p-text-color);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.schedule-room {
-    font-size: 0.85rem;
-    color: var(--p-primary-500);
-    background: rgba(var(--p-primary-500-rgb), 0.12);
-    border: 1px solid rgba(var(--p-primary-500-rgb), 0.2);
-    padding: 4px 8px;
-    border-radius: 999px;
-    white-space: nowrap;
-    justify-self: start;
-}
-.schedule-type {
-    font-size: 0.8rem;
-    color: var(--type-color);
-    border: 1px solid color-mix(in srgb, var(--type-color), transparent 60%);
-    background: color-mix(in srgb, var(--type-color), transparent 90%);
-    padding: 4px 8px;
-    border-radius: 999px;
-    white-space: nowrap;
+.widget-ghost {
+    opacity: 0.5;
 }
 
-.p-dark .schedule-time,
-.p-dark .schedule-room {
-    color: var(--p-primary-200);
-}
-
-.schedule-fade-enter-active,
-.schedule-fade-leave-active {
-    transition: opacity 0.28s ease, transform 0.28s ease;
-}
-.schedule-fade-enter-from,
-.schedule-fade-leave-to {
-    opacity: 0;
-    transform: translateY(6px);
+/* В режиме редактирования глушим hover-подъём карточек, чтобы не дёргалось при DnD */
+.dashboard-editing :deep(.panel-card:hover) {
+    transform: none;
 }
 
 @keyframes revealUp {
@@ -1057,95 +342,23 @@ h3 {
     }
 }
 
-@keyframes pulseGlow {
-    0%,
-    100% {
-        transform: scale(1);
-        opacity: 0.8;
-    }
-    50% {
-        transform: scale(1.08);
-        opacity: 1;
-    }
-}
-
 @keyframes driftBg {
-    from {
-        transform: translate3d(0, 0, 0);
-    }
-    to {
-        transform: translate3d(0, 18px, 0);
-    }
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(0, 18px, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .dashboard::before,
-    .hero,
-    .hero-glow,
-    .action-card,
-    .panel-card {
+    .hero {
         animation: none !important;
         transform: none !important;
         opacity: 1 !important;
     }
-    .action-card,
-    .panel-card,
-    .schedule-mini-item {
-        transition: none !important;
-    }
 }
 
 @media (max-width: 1024px) {
-    .dashboard {
-        padding-bottom: 1.5rem;
-    }
-    .hero h1 {
-        font-size: 2rem;
-    }
-}
-
-@media (min-width: 641px) and (max-width: 1200px) {
-    .panel-header {
-        align-items: flex-start;
-    }
-
-    .panel-header-main {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 0.6rem;
-    }
-
-    .schedule-mode-switch {
-        width: 100%;
-        max-width: 22rem;
-    }
-
-    .schedule-mode-switch :deep(.p-togglebutton) {
-        flex: 1 1 0;
-        min-width: 0;
-    }
-}
-
-@container (max-width: 28rem) {
-    .schedule-overview-card .panel-header {
-        align-items: flex-start;
-    }
-
-    .schedule-overview-card .panel-header-main {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 0.6rem;
-    }
-
-    .schedule-overview-card .schedule-mode-switch {
-        width: 100%;
-        max-width: none;
-    }
-
-    .schedule-overview-card .schedule-mode-switch :deep(.p-togglebutton) {
-        flex: 1 1 0;
-        min-width: 0;
-    }
+    .dashboard { padding-bottom: 1.5rem; }
+    .hero h1 { font-size: 2rem; }
 }
 
 @media (max-width: 640px) {
@@ -1160,46 +373,10 @@ h3 {
         font-size: 1.65rem;
         line-height: 1.15;
     }
-    .hero-pill {
-        margin-bottom: 10px;
-    }
-    .actions-grid,
-    .overview-grid {
+    .hero-pill { margin-bottom: 10px; }
+    .overview-grid,
+    .overview-grid-phone {
         grid-template-columns: 1fr;
     }
-    .action-card,
-    .panel-card {
-        border-radius: 18px;
-    }
-    .panel-header {
-        align-items: flex-start;
-        gap: 0.75rem;
-        flex-wrap: nowrap;
-    }
-
-    .panel-header-main {
-        flex: 1;
-        flex-wrap: wrap;
-        gap: 0.45rem 0.65rem;
-    }
-
-    .schedule-mode-switch :deep(.p-togglebutton) {
-        min-height: 2.65rem;
-    }
-
-    .schedule-mode-switch :deep(.p-togglebutton-content) {
-        justify-content: center;
-        padding: 0.35rem 0.7rem;
-    }
-
-    .schedule-mode-icon {
-        min-width: 2rem;
-        font-size: 1.05rem;
-    }
-
-    .status-grid {
-        grid-template-columns: 1fr;
-    }
-
 }
 </style>

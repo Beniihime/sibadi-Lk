@@ -5,14 +5,16 @@
     <aside
       v-if="authenticated && !isPhone"
       class="sidebar sidebar-collapsed"
-      :class="{ 'sidebar-hovered': isSidebarOpen }"
+      :class="{ 'sidebar-hovered': isSidebarOpen, 'sidebar-editing': dashboardEditingOnOverview }"
       @mouseenter="handleSidebarMouseEnter"
       @mouseleave="handleSidebarMouseLeave"
       @focusin="openSidebarImmediately"
       @focusout="closeSidebarAfterFocus"
     >
       <div class="sidebar-shell">
+        <WidgetPalette v-if="dashboardEditingOnOverview" />
         <SideBar
+          v-else
           :collapsed="!isSidebarOpen"
           class="position-relative"
           @overlay-open="lockSidebarForOverlay"
@@ -44,21 +46,25 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import SideBar from '@/components/SideBar.vue';
 import MobileSpeedDial from '@/components/Utils/MobileSpeedDial.vue';
+import WidgetPalette from '@/components/DashboardWidgets/WidgetPalette.vue';
 import { isAuthenticated, isLocalAuthBypass } from '@/utils/auth';
 import { useRoute } from 'vue-router';
 import { useNotificationStore } from '@/stores/notifications.js';
 import { getUnreadNotifications, normalizeNotification } from '@/api/notifications.js';
 import { connectNotificationsHub, disconnectNotificationsHub } from '@/utils/notificationHub.js';
 import { useResponsiveLayout } from '@/composables/useResponsiveLayout.js';
+import { useDashboardStore } from '@/stores/dashboard.js';
 
 const isSidebarOpen = ref(false);
 const isNotificationsPanelOpen = ref(false);
 const toast = useToast();
 const route = useRoute();
 const notificationStore = useNotificationStore();
+const dashboardStore = useDashboardStore();
 const { isPhone } = useResponsiveLayout();
 const authenticated = computed(() => isAuthenticated());
 const currentPageTitle = computed(() => route.meta?.title || 'Личный кабинет');
+const dashboardEditingOnOverview = computed(() => dashboardStore.editing && route.path === '/overview');
 let notificationsBootstrapPromise = null;
 let sidebarHoverTimer = null;
 let sidebarOverlayObserver = null;
@@ -132,6 +138,7 @@ const teardownNotifications = async () => {
   }
 };
 const closeSidebarAfterFocus = (event) => {
+  if (dashboardStore.editing) return;
   if (isNotificationsPanelOpen.value) return;
   if (!event.currentTarget.contains(event.relatedTarget)) {
     closeSidebar();
@@ -139,6 +146,7 @@ const closeSidebarAfterFocus = (event) => {
 };
 
 const closeSidebar = () => {
+  if (dashboardStore.editing) return;
   clearTimeout(sidebarHoverTimer);
   const activeElement = document.activeElement;
   if (activeElement instanceof HTMLElement && activeElement.id === 'searchQuery') {
@@ -148,6 +156,7 @@ const closeSidebar = () => {
 };
 
 const scheduleSidebarOpen = () => {
+  if (dashboardStore.editing) return;
   if (isSidebarInteractionLocked) return;
 
   clearTimeout(sidebarHoverTimer);
@@ -157,6 +166,7 @@ const scheduleSidebarOpen = () => {
 };
 
 const openSidebarImmediately = () => {
+  if (dashboardStore.editing) return;
   if (isSidebarInteractionLocked) return;
 
   clearTimeout(sidebarHoverTimer);
@@ -170,6 +180,7 @@ const openSidebarForSearch = async () => {
 };
 
 const handleSidebarMouseLeave = () => {
+  if (dashboardStore.editing) return;
   isPointerOverSidebar = false;
   isSidebarInteractionLocked = false;
   if (isNotificationsPanelOpen.value) return;
@@ -193,11 +204,13 @@ const handleSidebarMouseEnter = () => {
 };
 
 const lockSidebarForOverlay = () => {
+  if (dashboardStore.editing) return;
   isSidebarInteractionLocked = true;
   closeSidebar();
 };
 
 const handleOverlayMutation = () => {
+  if (dashboardStore.editing) return;
   const hasOpenModal = document.querySelector('.p-dialog-mask, .p-confirm-dialog, .p-drawer-mask');
 
   if (hasOpenModal) {
@@ -217,6 +230,7 @@ const handleOverlayMutation = () => {
 };
 
 const handleGlobalFocus = (event) => {
+  if (dashboardStore.editing) return;
   if (event.target instanceof Element && event.target.closest('.p-dialog, .p-confirm-dialog, .p-drawer')) {
     hasTrackedOpenModal = true;
     lockSidebarForOverlay();
@@ -226,7 +240,20 @@ const handleGlobalFocus = (event) => {
 watch(
   () => route.fullPath,
   () => {
+    if (dashboardStore.editing && route.path !== '/overview') {
+      dashboardStore.endEdit();
+    }
     closeSidebar();
+  }
+);
+
+// При входе в режим редактирования — фиксируем сайдбар раскрытым (палитра).
+watch(
+  () => dashboardStore.editing,
+  (editing) => {
+    if (editing) {
+      isSidebarOpen.value = true;
+    }
   }
 );
 
@@ -241,6 +268,12 @@ if (query.message) {
 
 if (isAuthenticated() && !isLocalAuthBypass()) {
   bootstrapNotifications();
+}
+
+// Загружаем настройки интерфейса (раскладка + тема) для всех авторизованных
+// маршрутов, чтобы смена темы с любого экрана сохраняла корректную раскладку.
+if (isAuthenticated()) {
+  dashboardStore.load();
 }
 });
 
@@ -351,6 +384,22 @@ onBeforeUnmount(() => {
   z-index: -1;
   background: radial-gradient(circle at 0 50%, rgba(var(--p-blue-500-rgb), 0.08), transparent 31%);
   animation: sidebar-overlay-in 0.38s ease both;
+}
+
+/* Режим редактирования: сайдбар = палитра виджетов, форсируем раскрытие
+   и убираем затемняющий overlay, чтобы палитра не перекрывала контент. */
+.sidebar-editing,
+.sidebar-editing.sidebar-collapsed {
+  width: 280px;
+}
+
+.sidebar-editing .sidebar-shell {
+  width: 280px;
+}
+
+.sidebar-editing::after {
+  content: none;
+  display: none;
 }
 
 @keyframes sidebar-overlay-in {

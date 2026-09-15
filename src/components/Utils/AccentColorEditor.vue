@@ -207,6 +207,9 @@ import {
 } from '@/utils/accentTheme.js';
 import { useAccentColorMath } from '@/components/Utils/composables/useAccentColorMath.js';
 import { useAccentCircleStorage } from '@/components/Utils/composables/useAccentCircleStorage.js';
+import { useDashboardStore } from '@/stores/dashboard.js';
+
+const dashboardStore = useDashboardStore();
 
 const props = defineProps({
     isSideBarCollapse: {
@@ -415,6 +418,8 @@ const switchToSeasonMode = () => {
     syncCustomEnabled();
     syncPrimaryTheme();
     syncPreviewFromTheme();
+    // Сезонный акцент по умолчанию — сбрасываем пользовательский в БД.
+    dashboardStore.setAccent(null);
 };
 
 const getSavedTheme = () => {
@@ -449,6 +454,8 @@ const applyAndPersistAccent = (hex) => {
     applyAccentTheme(hex, { stateDelta: stateDelta.value });
     saveAccentThemePreference(hex, { stateDelta: stateDelta.value });
     customEnabled.value = true;
+    // Синхронизация акцента с БД ЛКС (дебаунс в сторе).
+    dashboardStore.setAccent({ color: hex, stateDelta: stateDelta.value });
 };
 
 const togglePopover = (event) => {

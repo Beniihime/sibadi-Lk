@@ -121,7 +121,6 @@ const yearOptions = computed(() => {
 
 // Группы
 const selectedGroup = ref(null);
-const allGroups = ref([]);
 const filteredGroups = ref([]);
 const loadingGroups = ref(false);
 
@@ -131,54 +130,11 @@ const filteredUsers = ref([]);
 const loadingUsers = ref(false);
 const submitting = ref(false);
 
-// Загрузка начальных данных
+// Сброс состояния при открытии диалога (группы не предзагружаем —
+// поиск идёт на сервере после того, как пользователь введёт запрос).
 const loadInitialData = () => {
-    loadGroups();
-};
-
-// Загрузка групп для выбранного года
-const loadGroups = async () => {
-    if (!selectedYear.value) {
-        filteredGroups.value = [];
-        return;
-    }
-
-    loadingGroups.value = true;
-    try {
-        const response = await axiosInstance.get('https://umu.sibadi.org/api/raspGrouplist', {
-            params: { year: selectedYear.value }
-        });
-        
-        allGroups.value = response.data.data.map(group => {
-            if (typeof group === 'string') {
-                return {
-                    label: group,
-                    value: group,
-                    code: extractGroupCode(group)
-                };
-            } else {
-                return {
-                    label: group.name || group.title || group.groupName || JSON.stringify(group),
-                    value: group.id || group.code || group.name,
-                    code: group.code || extractGroupCode(group.name)
-                };
-            }
-        });
-        
-        filteredGroups.value = [...allGroups.value];
-        selectedGroup.value = null;
-    } catch (error) {
-        console.debug("Ошибка при загрузке групп: ", error);
-        window.dispatchEvent(new CustomEvent('toast', {
-            detail: { 
-                severity: 'error', 
-                summary: 'Ошибка', 
-                detail: 'Не удалось загрузить список групп',
-            }
-        }));
-    } finally {
-        loadingGroups.value = false;
-    }
+    selectedGroup.value = null;
+    filteredGroups.value = [];
 };
 
 // Функция для извлечения кода группы из названия
@@ -191,25 +147,58 @@ const extractGroupCode = (groupName) => {
     return '';
 };
 
-// Поиск групп
-const searchGroups = (event) => {
-    const query = event.query || '';
-    
-    if (!query.trim()) {
-        filteredGroups.value = allGroups.value;
+// Серверный поиск групп с дебаунсом (gRPC DeaneryService.GetGroups
+// с фильтром по году и названию, include = AcademicYear).
+const debouncedSearchGroups = debounce(async (query) => {
+    if (!selectedYear.value) {
+        filteredGroups.value = [];
         return;
     }
-    
-    filteredGroups.value = allGroups.value.filter(group => 
-        group.label.toLowerCase().includes(query.toLowerCase()) ||
-        (group.code && group.code.toLowerCase().includes(query.toLowerCase()))
-    );
+
+    const yearStart = parseInt(selectedYear.value, 10);
+
+    try {
+        const { data } = await axiosInstance.get('/api/umu/groups', {
+            params: { year: yearStart, name: query }
+        });
+
+        filteredGroups.value = (data || []).map(group => ({
+            label: group.name,
+            value: group.id,
+            code: extractGroupCode(group.name)
+        }));
+    } catch (error) {
+        console.debug("Ошибка при поиске групп: ", error);
+        window.dispatchEvent(new CustomEvent('toast', {
+            detail: {
+                severity: 'error',
+                summary: 'Ошибка',
+                detail: 'Не удалось выполнить поиск групп',
+            }
+        }));
+        filteredGroups.value = [];
+    } finally {
+        loadingGroups.value = false;
+    }
+}, 300);
+
+// Поиск групп
+const searchGroups = (event) => {
+    const query = (event.query || '').trim();
+
+    if (!query) {
+        filteredGroups.value = [];
+        return;
+    }
+
+    loadingGroups.value = true;
+    debouncedSearchGroups(query);
 };
 
 // Обработчик изменения года
 const onYearChange = () => {
     selectedGroup.value = null;
-    loadGroups();
+    filteredGroups.value = [];
 };
 
 // Серверный поиск пользователей с дебаунсом.
